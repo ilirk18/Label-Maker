@@ -1,0 +1,12 @@
+/* Label Maker – base layout */
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #1a1a1a;
+}
+
+.container {
+  display: flex;
+  height: 100vh;
+}

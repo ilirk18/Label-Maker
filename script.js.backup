@@ -1,0 +1,1823 @@
+const canvas = new fabric.Canvas('labelCanvas');
+canvas.selectionKey = 'shiftKey';
+let selectedTextObj = null;
+let isRestoring = false;
+
+// -------- Undo / Redo --------
+let history = [];
+let currentHistoryIndex = -1;
+const MAX_HISTORY = 50;
+
+function saveState() {
+  if (isRestoring) return;
+  const json = canvas.toJSON(['userDefinedName']);
+  const bg = canvas.backgroundColor || '#ffffff';
+  const state = { json, bg };
+  if (currentHistoryIndex < history.length - 1) {
+    history = history.slice(0, currentHistoryIndex + 1);
+  }
+  history.push(state);
+  if (history.length > MAX_HISTORY) {
+    history.shift();
+    currentHistoryIndex = history.length - 1;
+  } else {
+    currentHistoryIndex = history.length - 1;
+  }
+  updateUndoRedoButtons();
+}
+
+function restoreState(state) {
+  isRestoring = true;
+  canvas.loadFromJSON(state.json, function () {
+    canvas.setBackgroundColor(state.bg, canvas.renderAll.bind(canvas));
+    canvas.renderAll();
+    selectedTextObj = null;
+    updateLayersList();
+    isRestoring = false;
+    updateUndoRedoButtons();
+  });
+}
+
+function undo() {
+  if (currentHistoryIndex <= 0) return;
+  currentHistoryIndex--;
+  restoreState(history[currentHistoryIndex]);
+}
+
+function redo() {
+  if (currentHistoryIndex >= history.length - 1) return;
+  currentHistoryIndex++;
+  restoreState(history[currentHistoryIndex]);
+}
+
+function updateUndoRedoButtons() {
+  const btnUndo = document.getElementById('btnUndo');
+  const btnRedo = document.getElementById('btnRedo');
+  if (btnUndo) btnUndo.disabled = currentHistoryIndex <= 0;
+  if (btnRedo) btnRedo.disabled = currentHistoryIndex >= history.length - 1;
+}
+
+canvas.on('object:added', () => { saveState(); });
+canvas.on('object:modified', () => { saveState(); });
+canvas.on('object:removed', () => { saveState(); });
+
+// -------- Canvas --------
+canvas.setBackgroundColor('#ffffff', canvas.renderAll.bind(canvas));
+
+const MIN_CANVAS = 100;
+const MAX_CANVAS = 2000;
+
+function resizeCanvas() {
+  let width = parseInt(document.getElementById('labelWidth').value, 10);
+  let height = parseInt(document.getElementById('labelHeight').value, 10);
+  if (isNaN(width) || isNaN(height) || width < MIN_CANVAS || height < MIN_CANVAS) {
+    alert('Width and height must be at least ' + MIN_CANVAS + ' px.');
+    return;
+  }
+  if (width > MAX_CANVAS || height > MAX_CANVAS) {
+    alert('Width and height cannot exceed ' + MAX_CANVAS + ' px.');
+    return;
+  }
+  width = Math.min(MAX_CANVAS, Math.max(MIN_CANVAS, width));
+  height = Math.min(MAX_CANVAS, Math.max(MIN_CANVAS, height));
+  document.getElementById('labelWidth').value = width;
+  document.getElementById('labelHeight').value = height;
+  canvas.setWidth(width);
+  canvas.setHeight(height);
+  canvas.renderAll();
+  applyCanvasZoom();
+  saveState();
+}
+
+// -------- Label presets (all dimensions at 96 DPI: 1" = 96px) --------
+const LABEL_PRESET_GROUPS = [
+  { group: 'Custom', items: [{ value: 'custom', label: 'Custom (no change)' }] },
+  { group: 'Square & small', items: [
+    { value: '48x48', label: '0.5″ × 0.5″', w: 48, h: 48 },
+    { value: '96x96', label: '1″ × 1″', w: 96, h: 96 },
+    { value: '144x144', label: '1.5″ × 1.5″', w: 144, h: 144 },
+    { value: '192x192', label: '2″ × 2″', w: 192, h: 192 },
+    { value: '288x288', label: '3″ × 3″', w: 288, h: 288 },
+    { value: '384x384', label: '4″ × 4″', w: 384, h: 384 },
+    { value: '480x480', label: '5″ × 5″', w: 480, h: 480 }
+  ]},
+  { group: 'Avery & address (1–2″ height)', items: [
+    { value: '252x96', label: 'Avery 5160 — 2.63″ × 1″', w: 252, h: 96 },
+    { value: '96x252', label: 'Avery 5260 — 1″ × 2.63″', w: 96, h: 252 },
+    { value: '168x48', label: 'Avery 5161 — 1.75″ × 0.5″', w: 168, h: 48 },
+    { value: '48x168', label: 'Avery 5162 — 0.5″ × 1.75″', w: 48, h: 168 },
+    { value: '192x96', label: '2″ × 1″', w: 192, h: 96 },
+    { value: '96x192', label: '1″ × 2″', w: 96, h: 192 },
+    { value: '96x288', label: '1″ × 3″', w: 96, h: 288 },
+    { value: '48x96', label: '0.5″ × 1″', w: 48, h: 96 },
+    { value: '48x144', label: '0.5″ × 1.5″', w: 48, h: 144 },
+    { value: '96x48', label: '1″ × 0.5″', w: 96, h: 48 },
+    { value: '144x48', label: '1.5″ × 0.5″', w: 144, h: 48 },
+    { value: '192x144', label: '2″ × 1.5″', w: 192, h: 144 }
+  ]},
+  { group: 'Standard rectangular', items: [
+    { value: '192x288', label: '2″ × 3″', w: 192, h: 288 },
+    { value: '192x384', label: '2″ × 4″ (Avery 5163)', w: 192, h: 384 },
+    { value: '128x384', label: 'Avery 5164 — 1.33″ × 4″', w: 128, h: 384 },
+    { value: '288x192', label: '3″ × 2″', w: 288, h: 192 },
+    { value: '288x384', label: '3″ × 4″', w: 288, h: 384 },
+    { value: '288x480', label: '3″ × 5″', w: 288, h: 480 },
+    { value: '384x192', label: '4″ × 2″', w: 384, h: 192 },
+    { value: '384x288', label: '4″ × 3″', w: 384, h: 288 },
+    { value: '384x480', label: '4″ × 5″', w: 384, h: 480 },
+    { value: '384x576', label: '4″ × 6″ (photo / shipping)', w: 384, h: 576 },
+    { value: '480x288', label: '5″ × 3″', w: 480, h: 288 },
+    { value: '480x384', label: '5″ × 4″', w: 480, h: 384 },
+    { value: '480x672', label: '5″ × 7″', w: 480, h: 672 },
+    { value: '576x384', label: '6″ × 4″', w: 576, h: 384 }
+  ]},
+  { group: 'Name badges & cards', items: [
+    { value: '216x336', label: 'Name badge — 2.25″ × 3.5″', w: 216, h: 336 },
+    { value: '240x336', label: '2.5″ × 3.5″', w: 240, h: 336 },
+    { value: '336x216', label: '3.5″ × 2.25″', w: 336, h: 216 },
+    { value: '336x192', label: '3.5″ × 2″', w: 336, h: 192 },
+    { value: '336x480', label: 'Business card — 3.5″ × 5″', w: 336, h: 480 },
+    { value: '408x528', label: '4.25″ × 5.5″ (half letter)', w: 408, h: 528 }
+  ]},
+  { group: 'Large & sheet', items: [
+    { value: '816x1056', label: 'Letter — 8.5″ × 11″', w: 816, h: 1056 },
+    { value: '672x816', label: '7″ × 8.5″', w: 672, h: 816 },
+    { value: '576x768', label: '6″ × 8″', w: 576, h: 768 }
+  ]},
+  { group: 'Metric (mm → px @ 96 DPI)', items: [
+    { value: '94x189', label: '25 × 50 mm', w: 94, h: 189 },
+    { value: '189x94', label: '50 × 25 mm', w: 189, h: 94 },
+    { value: '113x189', label: '30 × 50 mm', w: 113, h: 189 },
+    { value: '151x227', label: '40 × 60 mm', w: 151, h: 227 },
+    { value: '189x302', label: '50 × 80 mm', w: 189, h: 302 },
+    { value: '189x378', label: '50 × 100 mm', w: 189, h: 378 },
+    { value: '280x397', label: 'A6 — 74 × 105 mm', w: 280, h: 397 },
+    { value: '397x559', label: 'A5 — 105 × 148 mm', w: 397, h: 559 }
+  ]}
+];
+
+const LABEL_PRESETS = {};
+LABEL_PRESET_GROUPS.forEach(function (g) {
+  g.items.forEach(function (it) {
+    if (it.w != null && it.h != null) LABEL_PRESETS[it.value] = { w: it.w, h: it.h };
+  });
+});
+
+function buildLabelPresetSelect() {
+  const sel = document.getElementById('labelPreset');
+  if (!sel) return;
+  sel.innerHTML = '';
+  LABEL_PRESET_GROUPS.forEach(function (g) {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = g.group;
+    g.items.forEach(function (it) {
+      const opt = document.createElement('option');
+      opt.value = it.value;
+      opt.textContent = it.label;
+      optgroup.appendChild(opt);
+    });
+    sel.appendChild(optgroup);
+  });
+}
+
+function applyLabelPreset() {
+  const sel = document.getElementById('labelPreset');
+  const val = sel && sel.value;
+  if (!val || val === 'custom') return;
+  const p = LABEL_PRESETS[val];
+  if (!p) return;
+  document.getElementById('labelWidth').value = p.w;
+  document.getElementById('labelHeight').value = p.h;
+  canvas.setWidth(p.w);
+  canvas.setHeight(p.h);
+  canvas.renderAll();
+  applyCanvasZoom();
+  saveState();
+}
+
+document.getElementById('labelPreset').addEventListener('change', function () {
+  if (this.value !== 'custom') {
+    applyLabelPreset();
+    try { localStorage.setItem('labelMakerLastPreset', this.value); } catch (err) {}
+  }
+});
+
+// -------- Snap to grid --------
+function getGridSize() {
+  const el = document.getElementById('gridSize');
+  const v = parseInt(el && el.value, 10);
+  return (el && !isNaN(v) && v >= 2) ? v : 10;
+}
+
+function snapToGrid(obj) {
+  const g = getGridSize();
+  const left = Math.round((obj.left || 0) / g) * g;
+  const top = Math.round((obj.top || 0) / g) * g;
+  obj.set({ left: left, top: top });
+  if (obj.type === 'activeSelection') {
+    obj.getObjects().forEach(function (o) {
+      const l = Math.round((o.left || 0) / g) * g;
+      const t = Math.round((o.top || 0) / g) * g;
+      o.set({ left: l, top: t });
+    });
+  }
+}
+
+canvas.on('object:modified', function (e) {
+  if (document.getElementById('snapToGrid') && document.getElementById('snapToGrid').checked) {
+    snapToGrid(e.target);
+    canvas.renderAll();
+  }
+});
+
+// -------- Canvas zoom --------
+function applyCanvasZoom() {
+  const sel = document.getElementById('canvasZoom');
+  const val = parseInt(sel && sel.value, 10) || 100;
+  const zoom = val / 100;
+  const w = canvas.getWidth();
+  const h = canvas.getHeight();
+  const wrap = document.getElementById('canvasZoomWrap');
+  const inner = document.getElementById('canvasZoomInner');
+  if (wrap) {
+    wrap.style.width = Math.round(w * zoom) + 'px';
+    wrap.style.height = Math.round(h * zoom) + 'px';
+  }
+  if (inner) {
+    inner.style.width = w + 'px';
+    inner.style.height = h + 'px';
+    inner.style.transform = 'scale(' + zoom + ')';
+  }
+}
+
+document.getElementById('canvasZoom').addEventListener('change', applyCanvasZoom);
+
+// -------- Align objects --------
+function alignObjects(how) {
+  const active = canvas.getActiveObject();
+  if (!active) return;
+  const w = canvas.getWidth();
+  const h = canvas.getHeight();
+  const obj = active.type === 'activeSelection' ? active : null;
+  const items = obj ? obj.getObjects() : (active ? [active] : []);
+  if (items.length === 0) return;
+  const bounds = obj ? obj.getBoundingRect() : active.getBoundingRect();
+  const left = bounds.left;
+  const top = bounds.top;
+  const width = bounds.width;
+  const height = bounds.height;
+  const centerX = left + width / 2;
+  const centerY = top + height / 2;
+  items.forEach(function (o) {
+    const oBounds = o.getBoundingRect();
+    const oW = oBounds.width;
+    const oH = oBounds.height;
+    let newLeft = o.left;
+    let newTop = o.top;
+    if (how === 'left') newLeft = left;
+    else if (how === 'center') newLeft = left + (width - oW) / 2;
+    else if (how === 'right') newLeft = left + width - oW;
+    else if (how === 'top') newTop = top;
+    else if (how === 'middle') newTop = top + (height - oH) / 2;
+    else if (how === 'bottom') newTop = top + height - oH;
+    o.set({ left: newLeft, top: newTop });
+  });
+  if (obj) obj.setCoords();
+  canvas.renderAll();
+  debouncedUpdateLayersList();
+}
+
+// -------- Object opacity --------
+function updateOpacityControl() {
+  const active = canvas.getActiveObject();
+  const slider = document.getElementById('objectOpacity');
+  const label = document.getElementById('opacityValue');
+  if (!slider || !label) return;
+  if (!active) {
+    slider.value = 100;
+    label.textContent = '100';
+    return;
+  }
+  const op = (active.opacity != null ? active.opacity : 1) * 100;
+  slider.value = Math.round(op);
+  label.textContent = Math.round(op);
+}
+
+function setObjectOpacity(value) {
+  const active = canvas.getActiveObject();
+  if (!active) return;
+  const v = Math.max(0, Math.min(100, parseInt(value, 10))) / 100;
+  if (active.type === 'activeSelection') {
+    active.getObjects().forEach(function (o) { o.set('opacity', v); });
+  } else {
+    active.set('opacity', v);
+  }
+  canvas.renderAll();
+  if (document.getElementById('opacityValue')) document.getElementById('opacityValue').textContent = Math.round(v * 100);
+}
+
+document.getElementById('objectOpacity').addEventListener('input', function () {
+  setObjectOpacity(this.value);
+});
+
+// -------- Text --------
+function addText() {
+  const color = document.getElementById('textColor').value;
+  const fontSize = parseInt(document.getElementById('fontSize').value, 10);
+  const fontFamily = document.getElementById('fontFamily').value;
+  const align = (document.getElementById('textAlign') && document.getElementById('textAlign').value) || 'left';
+  const text = new fabric.IText('Edit me', {
+    left: 50,
+    top: 50,
+    fill: color,
+    fontSize: fontSize,
+    fontFamily: fontFamily,
+    textAlign: align
+  });
+  canvas.add(text);
+  canvas.setActiveObject(text);
+  selectedTextObj = text;
+  debouncedUpdateLayersList();
+}
+
+// -------- QR Code (full options) --------
+function addQRCode() {
+  const qrText = document.getElementById('qrText').value;
+  if (!qrText) return alert('Please enter QR content');
+  const size = Math.max(40, Math.min(400, parseInt(document.getElementById('qrSize').value, 10) || 100));
+  const errorLevel = (document.getElementById('qrErrorLevel') && document.getElementById('qrErrorLevel').value) || 'M';
+  const margin = Math.max(0, Math.min(10, parseInt(document.getElementById('qrMargin').value, 10) || 1));
+  const dark = (document.getElementById('qrDark') && document.getElementById('qrDark').value) || '#000000';
+  const light = (document.getElementById('qrLight') && document.getElementById('qrLight').value) || '#ffffff';
+
+  const darkHex = dark.length === 7 ? dark + 'ff' : dark;
+  const lightHex = light.length === 7 ? light + 'ff' : light;
+  const opts = {
+    width: size,
+    margin: margin,
+    errorCorrectionLevel: errorLevel,
+    color: { dark: darkHex, light: lightHex }
+  };
+  QRCode.toDataURL(qrText, opts, function (err, url) {
+    if (err) return console.error(err);
+    fabric.Image.fromURL(url, function (img) {
+      img.set({ left: 150, top: 50, scaleX: 1, scaleY: 1 });
+      canvas.add(img);
+      debouncedUpdateLayersList();
+    });
+  });
+}
+
+// -------- Barcode --------
+function addBarcode() {
+  const data = document.getElementById('barcodeData').value.trim();
+  if (!data) return alert('Please enter barcode data');
+  const format = (document.getElementById('barcodeFormat') && document.getElementById('barcodeFormat').value) || 'CODE128';
+  const width = Math.max(1, parseInt(document.getElementById('barcodeWidth').value, 10) || 2);
+  const height = Math.max(20, parseInt(document.getElementById('barcodeHeight').value, 10) || 50);
+  try {
+    const c = document.createElement('canvas');
+    JsBarcode(c, data, { format: format, width: width, height: height });
+    const url = c.toDataURL('image/png');
+    fabric.Image.fromURL(url, function (img) {
+      img.set({ left: 80, top: 50 });
+      img._barcode = true;
+      canvas.add(img);
+      debouncedUpdateLayersList();
+    });
+  } catch (err) {
+    alert('Barcode error: ' + (err.message || 'invalid data for format'));
+  }
+}
+
+// -------- SVG --------
+function addSVG() {
+  const input = document.getElementById('svgUpload');
+  if (!input.files.length) return alert('Please choose an SVG file');
+
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      fabric.loadSVGFromString(e.target.result, function (objects, options) {
+        const obj = fabric.util.groupSVGElements(objects, options);
+        obj.scaleToWidth(100);
+        obj.scaleToHeight(100);
+        obj.set({ left: 100, top: 100 });
+        canvas.add(obj);
+        canvas.renderAll();
+        debouncedUpdateLayersList();
+      });
+    } catch (err) {
+      alert('Could not load SVG. The file may be invalid.');
+      console.error(err);
+    }
+  };
+  reader.readAsText(input.files[0]);
+  input.value = '';
+}
+
+// -------- Image (PNG/JPG) --------
+function addImage() {
+  const input = document.getElementById('imageUpload');
+  if (!input.files.length) return alert('Please choose an image file');
+  const file = input.files[0];
+  const url = URL.createObjectURL(file);
+  fabric.Image.fromURL(url, function (img) {
+    img.scaleToWidth(150);
+    img.set({ left: 80, top: 50 });
+    canvas.add(img);
+    canvas.renderAll();
+    debouncedUpdateLayersList();
+    URL.revokeObjectURL(url);
+  }, { crossOrigin: 'anonymous' });
+  input.value = '';
+}
+
+function addImageFromUrl() {
+  const url = document.getElementById('imageUrl') && document.getElementById('imageUrl').value.trim();
+  if (!url) return alert('Please enter an image URL');
+  fabric.Image.fromURL(url, function (img) {
+    img.scaleToWidth(150);
+    img.set({ left: 80, top: 50 });
+    canvas.add(img);
+    canvas.renderAll();
+    debouncedUpdateLayersList();
+  }, { crossOrigin: 'anonymous' });
+}
+
+// -------- Line --------
+function addLine() {
+  const color = document.getElementById('lineColor').value;
+  const width = parseInt(document.getElementById('lineWidth').value, 10);
+  const line = new fabric.Line([50, 100, 200, 100], {
+    stroke: color,
+    strokeWidth: width,
+    selectable: true
+  });
+  canvas.add(line);
+  debouncedUpdateLayersList();
+}
+
+// -------- Shapes (rectangle, circle) --------
+function addRectangle() {
+  const fill = document.getElementById('shapeFill').value;
+  const stroke = document.getElementById('shapeStroke').value;
+  const strokeW = Math.max(0, parseInt(document.getElementById('shapeStrokeWidth').value, 10) || 0);
+  const rect = new fabric.Rect({
+    left: 80,
+    top: 50,
+    width: 120,
+    height: 80,
+    fill: fill,
+    stroke: stroke,
+    strokeWidth: strokeW
+  });
+  canvas.add(rect);
+  canvas.setActiveObject(rect);
+  debouncedUpdateLayersList();
+}
+
+function addCircle() {
+  const fill = document.getElementById('shapeFill').value;
+  const stroke = document.getElementById('shapeStroke').value;
+  const strokeW = Math.max(0, parseInt(document.getElementById('shapeStrokeWidth').value, 10) || 0);
+  const circle = new fabric.Circle({
+    left: 80,
+    top: 50,
+    radius: 50,
+    fill: fill,
+    stroke: stroke,
+    strokeWidth: strokeW
+  });
+  canvas.add(circle);
+  canvas.setActiveObject(circle);
+  debouncedUpdateLayersList();
+}
+
+function addRoundedRect() {
+  const fill = document.getElementById('shapeFill').value;
+  const stroke = document.getElementById('shapeStroke').value;
+  const strokeW = Math.max(0, parseInt(document.getElementById('shapeStrokeWidth').value, 10) || 0);
+  const rect = new fabric.Rect({
+    left: 80,
+    top: 50,
+    width: 120,
+    height: 80,
+    rx: 16,
+    ry: 16,
+    fill: fill,
+    stroke: stroke,
+    strokeWidth: strokeW
+  });
+  canvas.add(rect);
+  canvas.setActiveObject(rect);
+  debouncedUpdateLayersList();
+}
+
+function addTriangle() {
+  const fill = document.getElementById('shapeFill').value;
+  const stroke = document.getElementById('shapeStroke').value;
+  const strokeW = Math.max(0, parseInt(document.getElementById('shapeStrokeWidth').value, 10) || 0);
+  const tri = new fabric.Triangle({
+    left: 80,
+    top: 50,
+    width: 100,
+    height: 90,
+    fill: fill,
+    stroke: stroke,
+    strokeWidth: strokeW
+  });
+  canvas.add(tri);
+  canvas.setActiveObject(tri);
+  debouncedUpdateLayersList();
+}
+
+function addStar() {
+  const fill = document.getElementById('shapeFill').value;
+  const stroke = document.getElementById('shapeStroke').value;
+  const strokeW = Math.max(0, parseInt(document.getElementById('shapeStrokeWidth').value, 10) || 0);
+  const star = new fabric.Polygon([
+    { x: 50, y: 0 }, { x: 61, y: 35 }, { x: 98, y: 35 }, { x: 68, y: 57 }, { x: 79, y: 92 },
+    { x: 50, y: 70 }, { x: 21, y: 92 }, { x: 32, y: 57 }, { x: 2, y: 35 }, { x: 39, y: 35 }
+  ], { left: 80, top: 50, fill: fill, stroke: stroke, strokeWidth: strokeW });
+  canvas.add(star);
+  canvas.setActiveObject(star);
+  debouncedUpdateLayersList();
+}
+
+// -------- Duplicate --------
+function duplicateSelected() {
+  const active = canvas.getActiveObject();
+  if (!active) return alert('Select an object first (e.g. from canvas or Layers).');
+  if (active.type === 'activeSelection') {
+    active.clone(function (cloned) {
+      cloned.set({ left: (active.left || 0) + 20, top: (active.top || 0) + 20 });
+      cloned.canvas = canvas;
+      cloned.setCoords();
+      canvas.add(cloned);
+      canvas.setActiveObject(cloned);
+      debouncedUpdateLayersList();
+    }, ['userDefinedName']);
+    return;
+  }
+  active.clone(function (cloned) {
+    cloned.set({ left: (active.left || 0) + 20, top: (active.top || 0) + 20 });
+    canvas.add(cloned);
+    canvas.setActiveObject(cloned);
+    debouncedUpdateLayersList();
+  });
+}
+
+// -------- Copy / Paste --------
+let clipboardObject = null;
+
+function copySelected() {
+  const active = canvas.getActiveObject();
+  if (!active) return;
+  clipboardObject = active.toObject(['userDefinedName']);
+}
+
+function pasteFromClipboard() {
+  if (!clipboardObject) return;
+  fabric.util.enlivenObjects([clipboardObject], function (objs) {
+    const o = objs[0];
+    if (!o) return;
+    o.set({ left: (o.left || 0) + 20, top: (o.top || 0) + 20 });
+    canvas.add(o);
+    canvas.setActiveObject(o);
+    canvas.renderAll();
+    debouncedUpdateLayersList();
+  });
+}
+
+// -------- Export filename --------
+function getExportFilename(ext) {
+  const raw = document.getElementById('exportFilename');
+  const name = (raw && raw.value.trim()) ? raw.value.trim() : 'label';
+  return name.replace(/\.(png|xml|zpl|pdf|json)$/i, '') + (ext ? '.' + ext : '');
+}
+
+function exportCanvasToZPL(canvasObj, filename) {
+  filename = filename || getExportFilename('zpl');
+  const img = new Image();
+  img.src = canvas.toDataURL({ format: 'png', multiplier: 1 });
+
+  img.onload = () => {
+    const width = img.width;
+    const height = img.height;
+    const rowBytes = Math.ceil(width / 8);
+    const totalBytes = rowBytes * height;
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = width;
+    offCanvas.height = height;
+    const ctx = offCanvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, width, height);
+    let zplData = '';
+    for (let y = 0; y < height; y++) {
+      let row = '';
+      for (let x = 0; x < width; x += 8) {
+        let byte = 0;
+        for (let b = 0; b < 8; b++) {
+          const px = x + b;
+          if (px < width) {
+            const i = (y * width + px) * 4;
+            const r = imageData.data[i];
+            const g = imageData.data[i + 1];
+            const bColor = imageData.data[i + 2];
+            const avg = (r + g + bColor) / 3;
+            const bit = avg < 128 ? 1 : 0;
+            byte |= bit << (7 - b);
+          }
+        }
+        row += byte.toString(16).padStart(2, '0').toUpperCase();
+      }
+      zplData += row;
+    }
+    const zplCode = `^XA\n^FO0,0^GFA,${totalBytes},${totalBytes},${rowBytes},${zplData}\n^XZ`;
+    const blob = new Blob([zplCode], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
+}
+
+function exportAsImage() {
+  const scale = parseInt(document.getElementById('exportScale') && document.getElementById('exportScale').value, 10) || 1;
+  const mult = Math.max(1, Math.min(3, scale));
+  const dataURL = canvas.toDataURL({ format: 'png', quality: 1, multiplier: mult });
+  const link = document.createElement('a');
+  link.download = getExportFilename('png');
+  link.href = dataURL;
+  link.click();
+}
+
+function printCanvas() {
+  const dataURL = canvas.toDataURL({ format: 'png', quality: 1 });
+  const w = window.open('', '_blank');
+  w.document.write('<html><head><title>Print</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;"><img src="' + dataURL + '" style="max-width:100%;height:auto;" /></body></html>');
+  w.document.close();
+  w.focus();
+  w.onload = function () { w.print(); w.close(); };
+}
+
+function clearCanvas() {
+  if (!confirm('Remove all objects from the canvas?')) return;
+  canvas.clear();
+  canvas.setBackgroundColor(document.getElementById('bgColorPicker').value || '#ffffff', canvas.renderAll.bind(canvas));
+  canvas.renderAll();
+  debouncedUpdateLayersList();
+  updateEmptyState();
+  saveState();
+}
+
+function newDesign() {
+  if (!confirm('Start a new design? Unsaved changes will be lost.')) return;
+  canvas.clear();
+  canvas.setBackgroundColor('#ffffff', canvas.renderAll.bind(canvas));
+  document.getElementById('bgColorPicker').value = '#ffffff';
+  document.getElementById('labelWidth').value = 400;
+  document.getElementById('labelHeight').value = 200;
+  document.getElementById('labelPreset').value = 'custom';
+  canvas.setWidth(400);
+  canvas.setHeight(200);
+  canvas.renderAll();
+  applyCanvasZoom();
+  debouncedUpdateLayersList();
+  updateEmptyState();
+  saveState();
+}
+
+function exportAsPDF() {
+  const w = canvas.getWidth();
+  const h = canvas.getHeight();
+  const dataURL = canvas.toDataURL({ format: 'png', quality: 1 });
+  try {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'px', format: [w, h], hotfixes: ['px_scaling'] });
+    pdf.addImage(dataURL, 'PNG', 0, 0, w, h);
+    pdf.save(getExportFilename('pdf'));
+  } catch (err) {
+    alert('PDF export failed. Make sure the script loaded.');
+    console.error(err);
+  }
+}
+
+// -------- Save / Load design (JSON) --------
+function saveDesignAsJSON() {
+  const json = canvas.toJSON(['userDefinedName']);
+  const bg = canvas.backgroundColor || '#ffffff';
+  const design = { version: 1, canvas: json, backgroundColor: bg, width: canvas.getWidth(), height: canvas.getHeight() };
+  const blob = new Blob([JSON.stringify(design, null, 2)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = getExportFilename('json');
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function loadDesignFromJSON() {
+  const input = document.getElementById('jsonImport');
+  if (!input.files.length) return alert('Choose a design file (.json).');
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = function () {
+    try {
+      const design = JSON.parse(reader.result);
+      const canvasData = design.canvas || design;
+      const bg = design.backgroundColor || '#ffffff';
+      const w = design.width || canvas.getWidth();
+      const h = design.height || canvas.getHeight();
+      isRestoring = true;
+      canvas.loadFromJSON(canvasData, function () {
+        canvas.setBackgroundColor(bg, canvas.renderAll.bind(canvas));
+        canvas.setWidth(w);
+        canvas.setHeight(h);
+        document.getElementById('labelWidth').value = w;
+        document.getElementById('labelHeight').value = h;
+        const presetEl = document.getElementById('labelPreset');
+        if (presetEl) presetEl.value = 'custom';
+        canvas.renderAll();
+        applyCanvasZoom();
+        selectedTextObj = null;
+        updateLayersList();
+        updateEmptyState();
+        isRestoring = false;
+        saveState();
+      });
+    } catch (err) {
+      alert('Could not load design file.');
+      console.error(err);
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+document.getElementById('jsonImport').addEventListener('change', function () {
+  if (this.files.length) loadDesignFromJSON();
+});
+
+// -------- Open (multi-format) --------
+if (typeof pdfjsLib !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+}
+
+function getFileExtension(file) {
+  var name = file.name || '';
+  var i = name.lastIndexOf('.');
+  return i >= 0 ? name.substring(i + 1).toLowerCase() : '';
+}
+
+function openFile(file) {
+  if (!file) return;
+  var ext = getFileExtension(file);
+  if (ext === 'json') return openAsJSON(file);
+  if (ext === 'xml') return openAsXML(file);
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp'].indexOf(ext) >= 0) return openAsImage(file);
+  if (ext === 'svg') return openAsSVG(file);
+  if (ext === 'md' || ext === 'markdown' || file.type === 'text/markdown') return openAsMD(file);
+  if (ext === 'pdf') return openAsPDF(file);
+  alert('Unsupported file type: .' + ext + '. Use JSON, XML, PNG, JPG, SVG, MD, or PDF.');
+}
+
+document.getElementById('openFileInput').addEventListener('change', function () {
+  if (this.files.length) openFile(this.files[0]);
+  this.value = '';
+});
+
+function openAsJSON(file) {
+  var reader = new FileReader();
+  reader.onload = function () {
+    try {
+      var design = JSON.parse(reader.result);
+      var canvasData = design.canvas || design;
+      var bg = design.backgroundColor || '#ffffff';
+      var w = design.width || canvas.getWidth();
+      var h = design.height || canvas.getHeight();
+      isRestoring = true;
+      canvas.loadFromJSON(canvasData, function () {
+        canvas.setBackgroundColor(bg, canvas.renderAll.bind(canvas));
+        canvas.setWidth(w);
+        canvas.setHeight(h);
+        document.getElementById('labelWidth').value = w;
+        document.getElementById('labelHeight').value = h;
+        var presetEl = document.getElementById('labelPreset');
+        if (presetEl) presetEl.value = 'custom';
+        canvas.renderAll();
+        applyCanvasZoom();
+        selectedTextObj = null;
+        updateLayersList();
+        updateEmptyState();
+        isRestoring = false;
+        saveState();
+      });
+    } catch (err) {
+      alert('Could not load JSON file.');
+      console.error(err);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function openAsXML(file) {
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      var parser = new DOMParser();
+      var doc = parser.parseFromString(e.target.result, 'text/xml');
+      var label = doc.querySelector('label');
+      if (!label) { alert('Invalid label XML.'); return; }
+      canvas.clear();
+      canvas.setBackgroundColor(document.getElementById('bgColorPicker').value || '#ffffff', canvas.renderAll.bind(canvas));
+      var objectEls = label.querySelectorAll('object');
+      var done = 0;
+      var total = objectEls.length;
+      function finishOpen() {
+        canvas.renderAll();
+        debouncedUpdateLayersList();
+        updateEmptyState();
+        saveState();
+      }
+      if (total === 0) { finishOpen(); return; }
+      objectEls.forEach(function (objEl) {
+        var type = objEl.getAttribute('type');
+        var left = parseFloat(getTextContent(objEl, 'left')) || 0;
+        var top = parseFloat(getTextContent(objEl, 'top')) || 0;
+        if (type === 'i-text') {
+          var text = getTextContent(objEl, 'text') || 'Text';
+          var fontSize = parseInt(getTextContent(objEl, 'fontSize'), 10) || 20;
+          var fill = getTextContent(objEl, 'fill') || '#000000';
+          var fontFamily = getTextContent(objEl, 'fontFamily') || 'Arial';
+          var textObj = new fabric.IText(text, { left: left, top: top, fill: fill, fontSize: fontSize, fontFamily: fontFamily });
+          canvas.add(textObj);
+          done++;
+          if (done === total) finishOpen();
+        } else if (type === 'line') {
+          var x1 = parseFloat(getTextContent(objEl, 'x1')) || 0;
+          var y1 = parseFloat(getTextContent(objEl, 'y1')) || 0;
+          var x2 = parseFloat(getTextContent(objEl, 'x2')) || 0;
+          var y2 = parseFloat(getTextContent(objEl, 'y2')) || 0;
+          var stroke = getTextContent(objEl, 'stroke') || '#000000';
+          var strokeWidth = parseInt(getTextContent(objEl, 'strokeWidth'), 10) || 2;
+          var line = new fabric.Line([x1, y1, x2, y2], { stroke: stroke, strokeWidth: strokeWidth, selectable: true });
+          canvas.add(line);
+          done++;
+          if (done === total) finishOpen();
+        } else if (type === 'image') {
+          var src = getTextContent(objEl, 'src');
+          var scaleX = parseFloat(getTextContent(objEl, 'scaleX')) || 1;
+          var scaleY = parseFloat(getTextContent(objEl, 'scaleY')) || 1;
+          if (!src) { done++; if (done === total) finishOpen(); return; }
+          fabric.Image.fromURL(src, function (img) {
+            img.set({ left: left, top: top, scaleX: scaleX, scaleY: scaleY });
+            canvas.add(img);
+            done++;
+            if (done === total) finishOpen();
+          }, { crossOrigin: 'anonymous' });
+        } else if (type === 'group') {
+          var svg = getTextContent(objEl, 'svg');
+          if (!svg) { done++; if (done === total) finishOpen(); return; }
+          fabric.loadSVGFromString(svg, function (objects, options) {
+            var group = fabric.util.groupSVGElements(objects, options);
+            group.set({ left: left, top: top });
+            canvas.add(group);
+            done++;
+            if (done === total) finishOpen();
+          });
+        } else { done++; if (done === total) finishOpen(); }
+      });
+    } catch (err) {
+      alert('Could not read XML file.');
+      console.error(err);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function openAsImage(file) {
+  var reader = new FileReader();
+  reader.onload = function () {
+    var dataURL = reader.result;
+    var img = new Image();
+    img.onload = function () {
+      var w = img.width;
+      var h = img.height;
+      canvas.clear();
+      canvas.setBackgroundColor('#ffffff', canvas.renderAll.bind(canvas));
+      canvas.setWidth(w);
+      canvas.setHeight(h);
+      document.getElementById('labelWidth').value = w;
+      document.getElementById('labelHeight').value = h;
+      var presetEl = document.getElementById('labelPreset');
+      if (presetEl) presetEl.value = 'custom';
+      fabric.Image.fromURL(dataURL, function (fabricImg) {
+        fabricImg.set({ left: 0, top: 0 });
+        canvas.add(fabricImg);
+        canvas.renderAll();
+        applyCanvasZoom();
+        debouncedUpdateLayersList();
+        updateEmptyState();
+        saveState();
+      });
+    };
+    img.onerror = function () { alert('Could not load image.'); };
+    img.src = dataURL;
+  };
+  reader.readAsDataURL(file);
+}
+
+function openAsSVG(file) {
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    var svgString = e.target.result;
+    try {
+      fabric.loadSVGFromString(svgString, function (objects, options) {
+        var group = fabric.util.groupSVGElements(objects, options);
+        var bounds = group.getBoundingRect();
+        var w = Math.max(400, Math.ceil(bounds.width + bounds.left + 20));
+        var h = Math.max(200, Math.ceil(bounds.height + bounds.top + 20));
+        canvas.clear();
+        canvas.setBackgroundColor('#ffffff', canvas.renderAll.bind(canvas));
+        canvas.setWidth(w);
+        canvas.setHeight(h);
+        document.getElementById('labelWidth').value = w;
+        document.getElementById('labelHeight').value = h;
+        var presetEl = document.getElementById('labelPreset');
+        if (presetEl) presetEl.value = 'custom';
+        canvas.add(group);
+        canvas.renderAll();
+        applyCanvasZoom();
+        debouncedUpdateLayersList();
+        updateEmptyState();
+        saveState();
+      });
+    } catch (err) {
+      alert('Could not load SVG file.');
+      console.error(err);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function openAsMD(file) {
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    var text = e.target.result;
+    canvas.clear();
+    canvas.setBackgroundColor('#ffffff', canvas.renderAll.bind(canvas));
+    var lines = text.split(/\r?\n/);
+    var maxW = 0;
+    var y = 20;
+    var fontSize = 14;
+    lines.forEach(function (line) {
+      var t = new fabric.IText(line || ' ', { left: 20, top: y, fontSize: fontSize, fontFamily: 'Arial', fill: '#000000' });
+      canvas.add(t);
+      var w = t.getBoundingRect().width;
+      if (w > maxW) maxW = w;
+      y += fontSize * 1.5;
+    });
+    var cw = Math.max(400, Math.ceil(maxW + 60));
+    var ch = Math.max(200, Math.ceil(y + 20));
+    canvas.setWidth(cw);
+    canvas.setHeight(ch);
+    document.getElementById('labelWidth').value = cw;
+    document.getElementById('labelHeight').value = ch;
+    var presetEl = document.getElementById('labelPreset');
+    if (presetEl) presetEl.value = 'custom';
+    canvas.renderAll();
+    applyCanvasZoom();
+    debouncedUpdateLayersList();
+    updateEmptyState();
+    saveState();
+  };
+  reader.readAsText(file);
+}
+
+function openAsPDF(file) {
+  if (typeof pdfjsLib === 'undefined') { alert('PDF support not loaded.'); return; }
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    var arrayBuffer = e.target.result;
+    pdfjsLib.getDocument(arrayBuffer).promise.then(function (pdf) {
+      return pdf.getPage(1);
+    }).then(function (page) {
+      var scale = 2;
+      var viewport = page.getViewport({ scale: scale });
+      var tempCanvas = document.createElement('canvas');
+      tempCanvas.width = viewport.width;
+      tempCanvas.height = viewport.height;
+      var ctx = tempCanvas.getContext('2d');
+      return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
+        return tempCanvas.toDataURL('image/png');
+      });
+    }).then(function (dataURL) {
+      var img = new Image();
+      img.onload = function () {
+        var w = img.width;
+        var h = img.height;
+        canvas.clear();
+        canvas.setBackgroundColor('#ffffff', canvas.renderAll.bind(canvas));
+        canvas.setWidth(w);
+        canvas.setHeight(h);
+        document.getElementById('labelWidth').value = w;
+        document.getElementById('labelHeight').value = h;
+        var presetEl = document.getElementById('labelPreset');
+        if (presetEl) presetEl.value = 'custom';
+        fabric.Image.fromURL(dataURL, function (fabricImg) {
+          fabricImg.set({ left: 0, top: 0 });
+          canvas.add(fabricImg);
+          canvas.renderAll();
+          applyCanvasZoom();
+          debouncedUpdateLayersList();
+          updateEmptyState();
+          saveState();
+        });
+      };
+      img.src = dataURL;
+    }).catch(function (err) {
+      alert('Could not load PDF.');
+      console.error(err);
+    });
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function exportAsXML() {
+  const objects = canvas.getObjects();
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<label>\n';
+  objects.forEach(obj => {
+    xml += '  <object type="' + obj.type + '">\n';
+    xml += `    <left>${obj.left}</left>\n`;
+    xml += `    <top>${obj.top}</top>\n`;
+    if (obj.type === 'i-text') {
+      xml += `    <text><![CDATA[${obj.text}]]></text>\n`;
+      xml += `    <fontSize>${obj.fontSize}</fontSize>\n`;
+      xml += `    <fill>${obj.fill}</fill>\n`;
+      xml += `    <fontFamily>${obj.fontFamily || 'Arial'}</fontFamily>\n`;
+    } else if (obj.type === 'line') {
+      xml += `    <x1>${obj.x1}</x1>\n`;
+      xml += `    <y1>${obj.y1}</y1>\n`;
+      xml += `    <x2>${obj.x2}</x2>\n`;
+      xml += `    <y2>${obj.y2}</y2>\n`;
+      xml += `    <stroke>${obj.stroke}</stroke>\n`;
+      xml += `    <strokeWidth>${obj.strokeWidth}</strokeWidth>\n`;
+    } else if (obj.type === 'image') {
+      const src = (obj._originalElement && obj._originalElement.src) ? obj._originalElement.src : (obj.toDataURL ? obj.toDataURL() : '');
+      xml += `    <src><![CDATA[${src}]]></src>\n`;
+      xml += `    <scaleX>${obj.scaleX}</scaleX>\n`;
+      xml += `    <scaleY>${obj.scaleY}</scaleY>\n`;
+    } else if (obj.type === 'group' && obj.toSVG) {
+      xml += `    <svg><![CDATA[${obj.toSVG()}]]></svg>\n`;
+    }
+    xml += '  </object>\n';
+  });
+  xml += '</label>';
+  const blob = new Blob([xml], { type: 'application/xml' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = getExportFilename('xml');
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+// -------- Import XML --------
+function getTextContent(el, tag) {
+  const n = el.querySelector(tag);
+  return n ? n.textContent.trim() : '';
+}
+
+function importFromXML() {
+  const input = document.getElementById('xmlImport');
+  if (!input.files.length) return alert('Please choose an XML file');
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(e.target.result, 'text/xml');
+      const label = doc.querySelector('label');
+      if (!label) return alert('Invalid label XML.');
+      const objectEls = label.querySelectorAll('object');
+      let done = 0;
+      const total = objectEls.length;
+      if (total === 0) return alert('No objects in file.');
+      objectEls.forEach(objEl => {
+        const type = objEl.getAttribute('type');
+        const left = parseFloat(getTextContent(objEl, 'left')) || 0;
+        const top = parseFloat(getTextContent(objEl, 'top')) || 0;
+        if (type === 'i-text') {
+          const text = getTextContent(objEl, 'text') || 'Text';
+          const fontSize = parseInt(getTextContent(objEl, 'fontSize'), 10) || 20;
+          const fill = getTextContent(objEl, 'fill') || '#000000';
+          const fontFamily = getTextContent(objEl, 'fontFamily') || 'Arial';
+          const textObj = new fabric.IText(text, { left, top, fill, fontSize, fontFamily });
+          canvas.add(textObj);
+          done++;
+          if (done === total) finishImport();
+        } else if (type === 'line') {
+          const x1 = parseFloat(getTextContent(objEl, 'x1')) || 0;
+          const y1 = parseFloat(getTextContent(objEl, 'y1')) || 0;
+          const x2 = parseFloat(getTextContent(objEl, 'x2')) || 0;
+          const y2 = parseFloat(getTextContent(objEl, 'y2')) || 0;
+          const stroke = getTextContent(objEl, 'stroke') || '#000000';
+          const strokeWidth = parseInt(getTextContent(objEl, 'strokeWidth'), 10) || 2;
+          const line = new fabric.Line([x1, y1, x2, y2], { stroke, strokeWidth, selectable: true });
+          canvas.add(line);
+          done++;
+          if (done === total) finishImport();
+        } else if (type === 'image') {
+          const src = getTextContent(objEl, 'src');
+          const scaleX = parseFloat(getTextContent(objEl, 'scaleX')) || 1;
+          const scaleY = parseFloat(getTextContent(objEl, 'scaleY')) || 1;
+          if (!src) { done++; if (done === total) finishImport(); return; }
+          fabric.Image.fromURL(src, function (img) {
+            img.set({ left, top, scaleX, scaleY });
+            canvas.add(img);
+            done++;
+            if (done === total) finishImport();
+          }, { crossOrigin: 'anonymous' });
+        } else if (type === 'group') {
+          const svg = getTextContent(objEl, 'svg');
+          if (!svg) { done++; if (done === total) finishImport(); return; }
+          fabric.loadSVGFromString(svg, function (objects, options) {
+            const group = fabric.util.groupSVGElements(objects, options);
+            group.set({ left, top });
+            canvas.add(group);
+            done++;
+            if (done === total) finishImport();
+          });
+        } else {
+          done++;
+          if (done === total) finishImport();
+        }
+      });
+    } catch (err) {
+      alert('Could not read XML file.');
+      console.error(err);
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+
+  function finishImport() {
+    canvas.renderAll();
+    debouncedUpdateLayersList();
+  }
+}
+
+// -------- Selection & text controls --------
+canvas.on('selection:created', (e) => {
+  updateTextControls(e);
+  highlightSelectedLayer();
+  updatePropertiesPanel();
+});
+
+canvas.on('selection:updated', (e) => {
+  updateTextControls(e);
+  highlightSelectedLayer();
+  updatePropertiesPanel();
+});
+
+canvas.on('selection:cleared', () => {
+  selectedTextObj = null;
+  clearTextControls();
+  updateOpacityControl();
+  highlightSelectedLayer();
+  updatePropertiesPanel();
+});
+
+function updateTextControls(e) {
+  const obj = e.selected[0];
+  if (obj && obj.type === 'i-text') {
+    selectedTextObj = obj;
+    document.getElementById('textColor').value = obj.fill || '#000000';
+    document.getElementById('fontSize').value = obj.fontSize || 20;
+    const fontSelect = document.getElementById('fontFamily');
+    if (fontSelect) fontSelect.value = obj.fontFamily || 'Arial';
+    const alignSelect = document.getElementById('textAlign');
+    if (alignSelect) alignSelect.value = obj.textAlign || 'left';
+    const btnBold = document.getElementById('btnBold');
+    const btnItalic = document.getElementById('btnItalic');
+    if (btnBold) btnBold.classList.toggle('active', obj.fontWeight === 'bold');
+    if (btnItalic) btnItalic.classList.toggle('active', obj.fontStyle === 'italic');
+  } else {
+    selectedTextObj = null;
+    clearTextControls();
+  }
+  updateOpacityControl();
+}
+
+function clearTextControls() {
+  document.getElementById('textColor').value = '#000000';
+  document.getElementById('fontSize').value = 20;
+  const fontSelect = document.getElementById('fontFamily');
+  if (fontSelect) fontSelect.value = 'Arial';
+  const alignSelect = document.getElementById('textAlign');
+  if (alignSelect) alignSelect.value = 'left';
+  const btnBold = document.getElementById('btnBold');
+  const btnItalic = document.getElementById('btnItalic');
+  if (btnBold) btnBold.classList.remove('active');
+  if (btnItalic) btnItalic.classList.remove('active');
+}
+
+function setTextBold() {
+  if (!selectedTextObj) return;
+  selectedTextObj.set('fontWeight', selectedTextObj.fontWeight === 'bold' ? 'normal' : 'bold');
+  canvas.renderAll();
+  if (document.getElementById('btnBold')) document.getElementById('btnBold').classList.toggle('active', selectedTextObj.fontWeight === 'bold');
+}
+
+function setTextItalic() {
+  if (!selectedTextObj) return;
+  selectedTextObj.set('fontStyle', selectedTextObj.fontStyle === 'italic' ? 'normal' : 'italic');
+  canvas.renderAll();
+  if (document.getElementById('btnItalic')) document.getElementById('btnItalic').classList.toggle('active', selectedTextObj.fontStyle === 'italic');
+}
+
+document.getElementById('textColor').addEventListener('input', () => {
+  if (selectedTextObj) {
+    selectedTextObj.set('fill', document.getElementById('textColor').value);
+    canvas.renderAll();
+  }
+});
+
+document.getElementById('fontSize').addEventListener('input', () => {
+  if (selectedTextObj) {
+    selectedTextObj.set('fontSize', parseInt(document.getElementById('fontSize').value, 10));
+    canvas.renderAll();
+  }
+});
+
+document.getElementById('fontFamily').addEventListener('change', () => {
+  if (selectedTextObj) {
+    selectedTextObj.set('fontFamily', document.getElementById('fontFamily').value);
+    canvas.renderAll();
+  }
+});
+
+document.getElementById('textAlign').addEventListener('change', function () {
+  if (selectedTextObj) {
+    selectedTextObj.set('textAlign', this.value);
+    canvas.renderAll();
+  }
+});
+
+document.getElementById('bgColorPicker').addEventListener('input', function () {
+  canvas.setBackgroundColor(this.value, canvas.renderAll.bind(canvas));
+});
+
+// -------- Keyboard shortcuts --------
+document.addEventListener('keydown', function (e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    const active = canvas.getActiveObject();
+    if (active) {
+      e.preventDefault();
+      if (active.type === 'activeSelection') {
+        active.getObjects().forEach(function (o) { canvas.remove(o); });
+        canvas.discardActiveObject();
+      } else {
+        canvas.remove(active);
+      }
+      debouncedUpdateLayersList();
+    }
+    return;
+  }
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    } else if (e.key === 'y') {
+      e.preventDefault();
+      redo();
+    } else if (e.key === 'd') {
+      e.preventDefault();
+      duplicateSelected();
+    } else if (e.key === 'c') {
+      e.preventDefault();
+      copySelected();
+    } else if (e.key === 'v') {
+      e.preventDefault();
+      pasteFromClipboard();
+    }
+  }
+});
+
+// -------- Layers panel (debounced) --------
+let layersListTimeout;
+function debouncedUpdateLayersList() {
+  clearTimeout(layersListTimeout);
+  layersListTimeout = setTimeout(updateLayersList, 80);
+}
+
+function updateLayersList() {
+  const layersList = document.getElementById('layersList');
+  if (!layersList) return;
+  layersList.innerHTML = '';
+  const objects = canvas.getObjects().slice().reverse();
+
+  objects.forEach((obj) => {
+    const li = document.createElement('li');
+    li.classList.add('layer-item');
+    li._fabricObject = obj;
+
+    let displayName = 'Unknown Object';
+    if (obj.type === 'i-text') {
+      displayName = 'Text: "' + (obj.text || '').substring(0, 20) + (obj.text && obj.text.length > 20 ? '...' : '') + '"';
+    } else if (obj.type === 'image') {
+      displayName = obj.userDefinedName || (obj._barcode ? 'Barcode' : 'QR Code');
+    } else if (obj.type === 'group') {
+      displayName = obj.userDefinedName || 'SVG';
+    } else if (obj.type === 'line') {
+      displayName = obj.userDefinedName || 'Line';
+    } else if (obj.type === 'rect') {
+      displayName = obj.userDefinedName || 'Rectangle';
+    } else if (obj.type === 'circle') {
+      displayName = obj.userDefinedName || 'Circle';
+    } else if (obj.type === 'triangle') {
+      displayName = obj.userDefinedName || 'Triangle';
+    } else if (obj.type === 'polygon') {
+      displayName = obj.userDefinedName || 'Star';
+    } else if (obj.type === 'image' && obj._barcode) {
+      displayName = obj.userDefinedName || 'Barcode';
+    }
+    const currentName = obj.userDefinedName || displayName;
+
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = currentName;
+    nameSpan.classList.add('layer-name');
+    li.appendChild(nameSpan);
+
+    nameSpan.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (nameSpan.querySelector('input.edit-name')) return;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = obj.userDefinedName || nameSpan.textContent;
+      input.classList.add('edit-name');
+      nameSpan.innerHTML = '';
+      nameSpan.appendChild(input);
+      input.focus();
+      input.select();
+      const saveName = () => {
+        const newName = input.value.trim();
+        if (newName) {
+          obj.userDefinedName = newName;
+          nameSpan.textContent = newName;
+        } else {
+          nameSpan.textContent = obj.userDefinedName || displayName;
+        }
+        if (input.parentNode) nameSpan.removeChild(input);
+      };
+      input.addEventListener('keypress', function (ev) { if (ev.key === 'Enter') saveName(); });
+      input.addEventListener('blur', saveName);
+    });
+
+    li.addEventListener('click', () => {
+      canvas.setActiveObject(obj);
+      canvas.renderAll();
+      highlightSelectedLayer();
+    });
+
+    const deleteButton = document.createElement('button');
+    deleteButton.textContent = 'X';
+    deleteButton.classList.add('delete-btn');
+    deleteButton.title = 'Delete layer';
+    deleteButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      canvas.remove(obj);
+      debouncedUpdateLayersList();
+    });
+    li.appendChild(deleteButton);
+
+    const bringForwardButton = document.createElement('button');
+    bringForwardButton.textContent = '↑';
+    bringForwardButton.classList.add('layer-move-btn');
+    bringForwardButton.title = 'Bring forward';
+    bringForwardButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      canvas.bringForward(obj);
+      canvas.requestRenderAll();
+      debouncedUpdateLayersList();
+    });
+    li.appendChild(bringForwardButton);
+
+    const sendBackwardButton = document.createElement('button');
+    sendBackwardButton.textContent = '↓';
+    sendBackwardButton.classList.add('layer-move-btn');
+    sendBackwardButton.title = 'Send backward';
+    sendBackwardButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      canvas.sendBackwards(obj);
+      canvas.requestRenderAll();
+      debouncedUpdateLayersList();
+    });
+    li.appendChild(sendBackwardButton);
+
+    layersList.appendChild(li);
+  });
+  highlightSelectedLayer();
+  updateEmptyState();
+}
+
+function updateEmptyState() {
+  const hint = document.getElementById('canvasEmptyHint');
+  if (!hint) return;
+  hint.style.display = canvas.getObjects().length === 0 ? 'block' : 'none';
+}
+
+function highlightSelectedLayer() {
+  const active = canvas.getActiveObject();
+  const layersList = document.getElementById('layersList');
+  if (!layersList) return;
+  Array.from(layersList.children).forEach(li => li.classList.remove('selected'));
+  if (!active) return;
+  const objects = canvas.getObjects();
+  const toHighlight = active.type === 'activeSelection' ? active.getObjects() : [active];
+  toHighlight.forEach(function (obj) {
+    const idx = objects.indexOf(obj);
+    if (idx === -1) return;
+    const reversedIndex = objects.length - 1 - idx;
+    const layerItem = layersList.children[reversedIndex];
+    if (layerItem) layerItem.classList.add('selected');
+  });
+}
+
+canvas.on('object:added', debouncedUpdateLayersList);
+canvas.on('object:removed', debouncedUpdateLayersList);
+canvas.on('object:modified', debouncedUpdateLayersList);
+canvas.on('selection:cleared', debouncedUpdateLayersList);
+canvas.on('selection:created', debouncedUpdateLayersList);
+canvas.on('selection:updated', debouncedUpdateLayersList);
+
+canvas.on('object:modified', () => { updatePropertiesPanel(); });
+
+// -------- Right panel tabs & Properties --------
+function switchRightPanelTab(tabName) {
+  document.querySelectorAll('.right-panel-tab').forEach(function (btn) {
+    const isActive = btn.getAttribute('data-tab') === tabName;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+  const paneLayers = document.getElementById('paneLayers');
+  const paneProperties = document.getElementById('paneProperties');
+  if (paneLayers) paneLayers.classList.toggle('hidden', tabName !== 'layers');
+  if (paneProperties) paneProperties.classList.toggle('hidden', tabName !== 'properties');
+}
+
+document.querySelectorAll('.right-panel-tab').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    switchRightPanelTab(this.getAttribute('data-tab'));
+  });
+});
+
+function hasFillAndStroke(type) {
+  return ['rect', 'circle', 'triangle', 'polygon', 'i-text', 'line'].indexOf(type) !== -1;
+}
+
+function updatePropertiesPanel() {
+  const emptyEl = document.querySelector('.properties-empty');
+  const fieldsEl = document.getElementById('propertiesFields');
+  if (!emptyEl || !fieldsEl) return;
+
+  const obj = canvas.getActiveObject();
+  if (!obj || (canvas.getActiveObjects && canvas.getActiveObjects().length > 1)) {
+    emptyEl.classList.remove('hidden');
+    fieldsEl.classList.add('hidden');
+    return;
+  }
+
+  emptyEl.classList.add('hidden');
+  fieldsEl.classList.remove('hidden');
+
+  const type = obj.type || '';
+
+  // Show/hide sections by type
+  document.querySelectorAll('.prop-section').forEach(function (section) {
+    let show = false;
+    if (section.classList.contains('prop-section-transform')) show = true;
+    else if (section.classList.contains('prop-section-fill')) show = hasFillAndStroke(type);
+    else if (section.classList.contains('prop-section-text')) show = type === 'i-text';
+    else if (section.classList.contains('prop-section-rect')) show = type === 'rect';
+    else if (section.classList.contains('prop-section-circle')) show = type === 'circle';
+    else if (section.classList.contains('prop-section-line')) show = type === 'line';
+    section.classList.toggle('hidden', !show);
+  });
+
+  // Transform (all)
+  const left = Math.round(obj.left);
+  const top = Math.round(obj.top);
+  const w = Math.round((obj.width * (obj.scaleX || 1)) || 0);
+  const h = Math.round((obj.height * (obj.scaleY || 1)) || 0);
+  const angle = Math.round(obj.angle || 0);
+  const opacity = Math.round((obj.opacity ?? 1) * 100);
+  setPropValue('propLeft', left);
+  setPropValue('propTop', top);
+  setPropValue('propWidth', w);
+  setPropValue('propHeight', h);
+  setPropValue('propAngle', angle);
+  setPropValue('propOpacity', opacity);
+  const flipX = document.getElementById('propFlipX');
+  const flipY = document.getElementById('propFlipY');
+  if (flipX) flipX.checked = !!obj.flipX;
+  if (flipY) flipY.checked = !!obj.flipY;
+
+  // Fill & stroke
+  const fill = (typeof obj.fill === 'string') ? obj.fill : '#000000';
+  const stroke = (typeof obj.stroke === 'string') ? obj.stroke : '#000000';
+  setPropValue('propFill', fill);
+  setPropValue('propStroke', stroke);
+  setPropValue('propStrokeWidth', Math.round(obj.strokeWidth || 0));
+
+  // Text
+  setPropValue('propFontFamily', obj.fontFamily || 'Arial');
+  setPropValue('propFontSize', Math.round(obj.fontSize || 20));
+  const propBold = document.getElementById('propBold');
+  const propItalic = document.getElementById('propItalic');
+  if (propBold) propBold.checked = obj.fontWeight === 'bold';
+  if (propItalic) propItalic.checked = obj.fontStyle === 'italic';
+  setPropValue('propTextAlign', obj.textAlign || 'left');
+
+  // Rect corner radius
+  setPropValue('propRx', Math.round(obj.rx || 0));
+  setPropValue('propRy', Math.round(obj.ry || 0));
+
+  // Circle radius
+  const radius = obj.radius != null ? Math.round(obj.radius) : Math.round((obj.width * (obj.scaleX || 1)) / 2);
+  setPropValue('propRadius', radius);
+
+  // Line
+  const x1 = obj.x1 != null ? Math.round(obj.x1) : 0;
+  const y1 = obj.y1 != null ? Math.round(obj.y1) : 0;
+  const x2 = obj.x2 != null ? Math.round(obj.x2) : 0;
+  const y2 = obj.y2 != null ? Math.round(obj.y2) : 0;
+  setPropValue('propLineX1', x1);
+  setPropValue('propLineY1', y1);
+  setPropValue('propLineX2', x2);
+  setPropValue('propLineY2', y2);
+}
+
+function setPropValue(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el.type === 'checkbox') el.checked = !!value;
+  else el.value = value;
+}
+
+function applyPropertyFromInput(value, setter) {
+  const obj = canvas.getActiveObject();
+  if (!obj) return;
+  const num = typeof value === 'number' ? value : parseFloat(value);
+  if (isNaN(num)) return;
+  setter(obj, num);
+  canvas.renderAll();
+  saveState();
+}
+
+// Transform
+document.getElementById('propLeft')?.addEventListener('change', function () {
+  applyPropertyFromInput(this.value, (o, v) => { o.set('left', v); });
+});
+document.getElementById('propTop')?.addEventListener('change', function () {
+  applyPropertyFromInput(this.value, (o, v) => { o.set('top', v); });
+});
+document.getElementById('propWidth')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj) return;
+  const v = parseFloat(this.value);
+  if (isNaN(v) || v <= 0) return;
+  const scaleX = v / (obj.width || 1);
+  obj.set('scaleX', scaleX);
+  canvas.renderAll();
+  saveState();
+});
+document.getElementById('propHeight')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj) return;
+  const v = parseFloat(this.value);
+  if (isNaN(v) || v <= 0) return;
+  const scaleY = v / (obj.height || 1);
+  obj.set('scaleY', scaleY);
+  canvas.renderAll();
+  saveState();
+});
+document.getElementById('propAngle')?.addEventListener('change', function () {
+  applyPropertyFromInput(this.value, (o, v) => { o.set('angle', v); });
+});
+document.getElementById('propOpacity')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj) return;
+  const v = parseFloat(this.value);
+  if (isNaN(v)) return;
+  obj.set('opacity', Math.max(0, Math.min(1, v / 100)));
+  canvas.renderAll();
+  saveState();
+  updateOpacityControl();
+});
+document.getElementById('propFlipX')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj) return;
+  obj.set('flipX', this.checked);
+  canvas.renderAll();
+  saveState();
+});
+document.getElementById('propFlipY')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj) return;
+  obj.set('flipY', this.checked);
+  canvas.renderAll();
+  saveState();
+});
+
+// Fill & stroke
+document.getElementById('propFill')?.addEventListener('input', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj) return;
+  obj.set('fill', this.value);
+  canvas.renderAll();
+  saveState();
+  if (obj.type === 'i-text') syncTextControlsFromSelection();
+});
+document.getElementById('propStroke')?.addEventListener('input', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj) return;
+  obj.set('stroke', this.value);
+  canvas.renderAll();
+  saveState();
+});
+document.getElementById('propStrokeWidth')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj) return;
+  const v = Math.max(0, parseFloat(this.value));
+  if (isNaN(v)) return;
+  obj.set('strokeWidth', v);
+  canvas.renderAll();
+  saveState();
+});
+
+// Text (sync left panel after change)
+function syncTextControlsFromSelection() {
+  const obj = canvas.getActiveObject();
+  if (obj && obj.type === 'i-text') updateTextControls({ selected: [obj] });
+}
+document.getElementById('propFontFamily')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj || obj.type !== 'i-text') return;
+  obj.set('fontFamily', this.value);
+  canvas.renderAll();
+  saveState();
+  syncTextControlsFromSelection();
+});
+document.getElementById('propFontSize')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj || obj.type !== 'i-text') return;
+  const v = parseInt(this.value, 10);
+  if (isNaN(v) || v < 1) return;
+  obj.set('fontSize', v);
+  canvas.renderAll();
+  saveState();
+  syncTextControlsFromSelection();
+});
+document.getElementById('propBold')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj || obj.type !== 'i-text') return;
+  obj.set('fontWeight', this.checked ? 'bold' : 'normal');
+  canvas.renderAll();
+  saveState();
+  syncTextControlsFromSelection();
+});
+document.getElementById('propItalic')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj || obj.type !== 'i-text') return;
+  obj.set('fontStyle', this.checked ? 'italic' : 'normal');
+  canvas.renderAll();
+  saveState();
+  syncTextControlsFromSelection();
+});
+document.getElementById('propTextAlign')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj || obj.type !== 'i-text') return;
+  obj.set('textAlign', this.value);
+  canvas.renderAll();
+  saveState();
+  syncTextControlsFromSelection();
+});
+
+// Rect corner radius
+document.getElementById('propRx')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj || obj.type !== 'rect') return;
+  const v = Math.max(0, parseFloat(this.value));
+  if (isNaN(v)) return;
+  obj.set('rx', v);
+  canvas.renderAll();
+  saveState();
+});
+document.getElementById('propRy')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj || obj.type !== 'rect') return;
+  const v = Math.max(0, parseFloat(this.value));
+  if (isNaN(v)) return;
+  obj.set('ry', v);
+  canvas.renderAll();
+  saveState();
+});
+
+// Circle radius
+document.getElementById('propRadius')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj || obj.type !== 'circle') return;
+  const v = parseFloat(this.value);
+  if (isNaN(v) || v < 1) return;
+  obj.set('radius', v);
+  canvas.renderAll();
+  saveState();
+});
+
+// Line
+document.getElementById('propLineX1')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj || obj.type !== 'line') return;
+  const v = parseFloat(this.value);
+  if (isNaN(v)) return;
+  obj.set('x1', v);
+  canvas.renderAll();
+  saveState();
+});
+document.getElementById('propLineY1')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj || obj.type !== 'line') return;
+  const v = parseFloat(this.value);
+  if (isNaN(v)) return;
+  obj.set('y1', v);
+  canvas.renderAll();
+  saveState();
+});
+document.getElementById('propLineX2')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj || obj.type !== 'line') return;
+  const v = parseFloat(this.value);
+  if (isNaN(v)) return;
+  obj.set('x2', v);
+  canvas.renderAll();
+  saveState();
+});
+document.getElementById('propLineY2')?.addEventListener('change', function () {
+  const obj = canvas.getActiveObject();
+  if (!obj || obj.type !== 'line') return;
+  const v = parseFloat(this.value);
+  if (isNaN(v)) return;
+  obj.set('y2', v);
+  canvas.renderAll();
+  saveState();
+});
+
+// -------- Panel state (localStorage) --------
+const PANEL_STATE_KEY = 'labelMakerPanelState';
+
+function savePanelState() {
+  const panels = document.querySelectorAll('.controls .control-panel');
+  const state = {};
+  panels.forEach(function (el) {
+    if (el.id) state[el.id] = el.hasAttribute('open');
+  });
+  try { localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(state)); } catch (err) {}
+}
+
+function restorePanelState() {
+  try {
+    const raw = localStorage.getItem(PANEL_STATE_KEY);
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    Object.keys(state).forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el && state[id]) el.setAttribute('open', '');
+      else if (el) el.removeAttribute('open');
+    });
+  } catch (err) {}
+}
+
+document.querySelectorAll('.controls .control-panel').forEach(function (panel) {
+  panel.addEventListener('toggle', savePanelState);
+});
+
+// Initial state for undo and layers
+buildLabelPresetSelect();
+var lastPreset = '';
+try { lastPreset = localStorage.getItem('labelMakerLastPreset') || ''; } catch (err) {}
+if (lastPreset && LABEL_PRESETS[lastPreset]) {
+  var sel = document.getElementById('labelPreset');
+  if (sel) { sel.value = lastPreset; applyLabelPreset(); }
+}
+saveState();
+updateLayersList();
+updateEmptyState();
+updatePropertiesPanel();
+restorePanelState();
+applyCanvasZoom();

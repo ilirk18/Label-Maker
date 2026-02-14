@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Label Designer</title>
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/panels.css" />
+  <link rel="stylesheet" href="css/canvas.css" />
+  <link rel="stylesheet" href="css/theme-light.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&family=Roboto:wght@400;700&family=Lato:wght@400;700&family=Oswald:wght@400;700&family=Source+Sans+3:wght@400;700&family=Montserrat:wght@400;700&family=PT+Sans:wght@400;700&family=Inter:wght@400;700&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="controls" id="controlsPanel">
+      <div class="panel-header">
+        <span class="panel-title">Tools & Options</span>
+      </div>
+
+      <!-- 1. File Management -->
+      <details class="control-panel" id="panel-file">
+        <summary class="panel-summary">File</summary>
+        <div class="panel-content panel-tree">
+          <div class="panel-section">
+            <span class="panel-label">Document</span>
+            <div class="row-buttons">
+              <button type="button" onclick="newDesign()" class="btn-panel btn-sm">New</button>
+              <button type="button" onclick="clearCanvas()" class="btn-panel btn-sm">Clear</button>
+            </div>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Open</span>
+            <span class="panel-hint">Replaces canvas. JSON, XML, image, SVG, MD, PDF</span>
+            <label class="file-label"><input type="file" id="openFileInput" accept=".json,.xml,.png,.jpg,.jpeg,.gif,.webp,.svg,.md,.pdf,application/json,application/xml,image/*,text/plain,application/pdf" /> Choose file</label>
+            <button type="button" onclick="document.getElementById('openFileInput').click()" class="btn-panel btn-sm btn-primary">Open</button>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Load</span>
+            <span class="panel-hint">.json replaces canvas; .xml adds to it</span>
+            <div class="row-buttons">
+              <label class="file-label"><input type="file" id="jsonImport" accept=".json" /> .json</label>
+              <button type="button" onclick="document.getElementById('jsonImport').click()" class="btn-panel btn-sm">Load</button>
+            </div>
+            <div class="row-buttons">
+              <label class="file-label"><input type="file" id="xmlImport" accept=".xml" /> .xml</label>
+              <button type="button" onclick="importFromXML()" class="btn-panel btn-sm">Import</button>
+            </div>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Save</span>
+            <label>Filename <input type="text" id="exportFilename" placeholder="label" value="label" class="input-text" /></label>
+            <button type="button" onclick="saveDesignAsJSON()" class="btn-panel btn-sm">Save design (.json)</button>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Export</span>
+            <label>PNG scale <select id="exportScale" class="input-select">
+              <option value="1">1×</option>
+              <option value="2">2× (HD)</option>
+              <option value="3">3×</option>
+            </select></label>
+            <div class="row-buttons">
+              <button type="button" onclick="exportAsImage()" class="btn-panel btn-sm">PNG</button>
+              <button type="button" onclick="exportAsPDF()" class="btn-panel btn-sm">PDF</button>
+              <button type="button" onclick="exportAsXML()" class="btn-panel btn-sm">XML</button>
+              <button type="button" onclick="exportCanvasToZPL()" class="btn-panel btn-sm">ZPL</button>
+            </div>
+          </div>
+          <div class="panel-section">
+            <button type="button" onclick="printCanvas()" class="btn-panel btn-sm">Print</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- 2. Canvas Settings -->
+      <details class="control-panel" id="panel-canvas">
+        <summary class="panel-summary">Canvas</summary>
+        <div class="panel-content">
+          <div class="panel-section">
+            <span class="panel-label">Size</span>
+            <label>Preset <select id="labelPreset" class="input-select"></select></label>
+            <div class="row-fields">
+              <label>W <input type="number" id="labelWidth" value="400" class="input-num" /></label>
+              <label>H <input type="number" id="labelHeight" value="200" class="input-num" /></label>
+            </div>
+            <button type="button" onclick="resizeCanvas()" class="btn-panel">Resize</button>
+            <label>Background <input type="color" id="bgColorPicker" value="#ffffff" title="Label background" class="input-color" /></label>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Grid &amp; guides</span>
+            <label class="row-check"><input type="checkbox" id="showGrid" /> Show grid</label>
+            <label class="row-check"><input type="checkbox" id="snapToGrid" /> Snap to grid</label>
+            <label>Grid <input type="number" id="gridSize" value="10" min="2" class="input-num" /> px</label>
+            <label class="row-check"><input type="checkbox" id="showGuides" /> Show guides</label>
+            <div class="row-buttons">
+              <button type="button" id="btnAddGuideH" class="btn-panel btn-sm">Add H guide</button>
+              <button type="button" id="btnAddGuideV" class="btn-panel btn-sm">Add V guide</button>
+            </div>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">View</span>
+            <label>Zoom <select id="canvasZoom" class="input-select">
+              <option value="50">50%</option>
+              <option value="75">75%</option>
+              <option value="100" selected>100%</option>
+              <option value="125">125%</option>
+              <option value="150">150%</option>
+              <option value="200">200%</option>
+            </select></label>
+            <button type="button" id="btnCanvasPan" onclick="setPanTool(true)" class="btn-panel btn-sm btn-icon" title="Pan / Scroll canvas">
+              <svg class="icon icon-pan" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6 2c-.5 0-1 .2-1.4.5L2 5v7h3v-4h1v5h2V8h1v5h2V8h1v4h3V5l-2.6-2.5C11 2.2 10.5 2 10 2H6z"/></svg>
+              Pan
+            </button>
+          </div>
+        </div>
+      </details>
+
+      <!-- 3. Selection & Transform -->
+      <details class="control-panel" id="panel-select">
+        <summary class="panel-summary">Selection &amp; Transform</summary>
+        <div class="panel-content">
+          <div class="panel-section">
+            <span class="panel-label">Tool</span>
+            <div class="row-buttons tool-buttons tool-buttons-icon-only">
+              <button type="button" id="btnCanvasSelect" onclick="setShapeTool(null); setDrawingTool('select'); if(window.updateCanvasToolButtons) updateCanvasToolButtons('select');" class="btn-panel btn-sm btn-icon btn-icon-only active" title="Select / Move (V)">
+                <svg class="icon icon-select" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M2 2l4 11 2-5 5-2L2 2z"/></svg>
+              </button>
+            </div>
+            <span class="panel-hint">Shift+click: multi-select. V: Select tool.</span>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Arrange</span>
+            <div class="row-buttons">
+              <button type="button" onclick="bringSelectedToFront()" class="btn-panel btn-sm btn-requires-selection" title="Bring to front">Front</button>
+              <button type="button" onclick="sendSelectedToBack()" class="btn-panel btn-sm btn-requires-selection" title="Send to back">Back</button>
+            </div>
+            <div class="row-buttons">
+              <button type="button" onclick="bringSelectedForward()" class="btn-panel btn-sm btn-requires-selection">Forward</button>
+              <button type="button" onclick="sendSelectedBackward()" class="btn-panel btn-sm btn-requires-selection">Backward</button>
+            </div>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Align</span>
+            <div class="row-buttons">
+              <button type="button" onclick="alignObjects('left')" class="btn-panel btn-sm btn-requires-selection">←</button>
+              <button type="button" onclick="alignObjects('center')" class="btn-panel btn-sm btn-requires-selection">↔</button>
+              <button type="button" onclick="alignObjects('right')" class="btn-panel btn-sm btn-requires-selection">→</button>
+            </div>
+            <div class="row-buttons">
+              <button type="button" onclick="alignObjects('top')" class="btn-panel btn-sm btn-requires-selection">↑</button>
+              <button type="button" onclick="alignObjects('middle')" class="btn-panel btn-sm btn-requires-selection">↕</button>
+              <button type="button" onclick="alignObjects('bottom')" class="btn-panel btn-sm btn-requires-selection">↓</button>
+            </div>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Object</span>
+            <button type="button" onclick="duplicateSelected()" class="btn-panel btn-sm btn-requires-selection">Duplicate</button>
+            <div class="row-fields">
+              <label>DX <input type="number" id="duplicateOffsetX" value="20" class="input-num input-requires-selection" /></label>
+              <label>DY <input type="number" id="duplicateOffsetY" value="20" class="input-num input-requires-selection" /></label>
+            </div>
+            <button type="button" onclick="duplicateWithOffset()" class="btn-panel btn-sm btn-requires-selection">Duplicate + offset</button>
+            <div class="row-buttons">
+              <button type="button" onclick="groupSelected()" class="btn-panel btn-sm btn-requires-selection">Group</button>
+              <button type="button" onclick="ungroupSelected()" class="btn-panel btn-sm btn-requires-group">Ungroup</button>
+            </div>
+            <label class="row-check"><input type="checkbox" id="lockAspectRatio" class="input-requires-selection" /> Lock aspect ratio</label>
+            <label>Opacity <input type="range" id="objectOpacity" min="0" max="100" value="100" class="input-range input-requires-selection" /><span id="opacityValue">100</span>%</label>
+            <button type="button" onclick="deleteSelected()" class="btn-panel btn-sm btn-requires-selection">Delete</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- 4. Text -->
+      <details class="control-panel" id="panel-text">
+        <summary class="panel-summary">Text</summary>
+        <div class="panel-content">
+          <div class="panel-section">
+            <span class="panel-label">Add</span>
+            <button type="button" onclick="addText()" class="btn-panel">Add Text</button>
+            <button type="button" onclick="addDatePlaceholder()" class="btn-panel btn-sm">Insert date</button>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Style</span>
+            <label>Font <select id="fontFamily" class="input-select">
+              <option value="Arial">Arial</option>
+              <option value="Helvetica">Helvetica</option>
+              <option value="Times New Roman">Times New Roman</option>
+              <option value="Courier New">Courier New</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Verdana">Verdana</option>
+              <option value="Open Sans">Open Sans</option>
+              <option value="Roboto">Roboto</option>
+              <option value="Lato">Lato</option>
+              <option value="Oswald">Oswald</option>
+              <option value="Source Sans 3">Source Sans 3</option>
+              <option value="Montserrat">Montserrat</option>
+              <option value="PT Sans">PT Sans</option>
+              <option value="Inter">Inter</option>
+            </select></label>
+            <label>Color <input type="color" id="textColor" value="#000000" class="input-color" /></label>
+            <label>Size <input type="number" id="fontSize" value="20" min="5" class="input-num" /></label>
+            <label>Align <select id="textAlign" class="input-select">
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+            </select></label>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Format</span>
+            <div class="row-buttons">
+              <button type="button" id="btnBold" onclick="setTextBold()" class="btn-panel btn-sm">Bold</button>
+              <button type="button" id="btnItalic" onclick="setTextItalic()" class="btn-panel btn-sm">Italic</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- 5. Shapes -->
+      <details class="control-panel" id="panel-shapes">
+        <summary class="panel-summary">Shapes</summary>
+        <div class="panel-content">
+          <div class="panel-section">
+            <span class="panel-label">Style</span>
+            <label class="row-check"><input type="checkbox" id="shapeOutlineOnly" /> Outline only</label>
+            <label>Fill <input type="color" id="shapeFill" value="#e0e0e0" class="input-color" /></label>
+            <label>Stroke <input type="color" id="shapeStroke" value="#000000" class="input-color" /></label>
+            <label>Stroke W <input type="number" id="shapeStrokeWidth" value="1" min="0" class="input-num" /></label>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Tools</span>
+            <span class="panel-hint">Drag on canvas to draw.</span>
+            <div class="row-buttons">
+              <button type="button" id="btnShapeSelect" onclick="setShapeTool(null)" class="btn-panel btn-sm btn-icon active" title="Select (V)">
+                <svg class="icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M2 2l4 11 2-5 5-2L2 2z"/></svg>
+                Select
+              </button>
+              <button type="button" id="btnShapeRect" onclick="setShapeTool('rect')" class="btn-panel btn-sm" title="Rectangle – Shift: square, Alt: from center">Rect</button>
+              <button type="button" id="btnShapeRounded" onclick="setShapeTool('roundedRect')" class="btn-panel btn-sm" title="Rounded rect – Shift: square">Rounded</button>
+            </div>
+            <div class="row-buttons">
+              <button type="button" id="btnShapeCircle" onclick="setShapeTool('circle')" class="btn-panel btn-sm" title="Circle (Shift: square)">Circle</button>
+              <button type="button" id="btnShapeEllipse" onclick="setShapeTool('ellipse')" class="btn-panel btn-sm" title="Ellipse">Ellipse</button>
+              <button type="button" id="btnShapeTriangle" onclick="setShapeTool('triangle')" class="btn-panel btn-sm">Triangle</button>
+              <button type="button" id="btnShapeStar" onclick="setShapeTool('star')" class="btn-panel btn-sm">Star</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- 6. Line & Arrow -->
+      <details class="control-panel" id="panel-line">
+        <summary class="panel-summary">Line &amp; Arrow</summary>
+        <div class="panel-content">
+          <div class="panel-section">
+            <span class="panel-hint">Select Line tool then drag on canvas. Shift: 45° angles.</span>
+            <label>Color <input type="color" id="lineColor" value="#000000" class="input-color" /></label>
+            <label>Width <input type="number" id="lineWidth" value="2" min="1" class="input-num" /></label>
+            <label>Arrow <select id="lineArrow" class="input-select">
+              <option value="none">None</option>
+              <option value="end">End</option>
+              <option value="start">Start</option>
+              <option value="both">Both</option>
+            </select></label>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Tools</span>
+            <div class="row-buttons">
+              <button type="button" id="btnShapeLine" onclick="setShapeTool('line')" class="btn-panel btn-sm" title="Draw line (drag on canvas)">Line tool</button>
+              <button type="button" onclick="addLine()" class="btn-panel btn-sm">Add fixed line</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- 7. Drawing Tools -->
+      <details class="control-panel" id="panel-draw">
+        <summary class="panel-summary">Draw</summary>
+        <div class="panel-content">
+          <div class="panel-section">
+            <span class="panel-label">Tools</span>
+            <div class="row-buttons">
+              <button type="button" id="btnToolPencil" onclick="setDrawingTool('pencil')" class="btn-panel btn-sm" title="Pencil">Pencil</button>
+              <button type="button" id="btnToolBrush" onclick="setDrawingTool('brush')" class="btn-panel btn-sm" title="Brush">Brush</button>
+              <button type="button" id="btnToolSpray" onclick="setDrawingTool('spray')" class="btn-panel btn-sm" title="Spray">Spray</button>
+              <button type="button" id="btnToolEraser" onclick="setDrawingTool('eraser')" class="btn-panel btn-sm" title="Eraser">Eraser</button>
+              <button type="button" id="btnToolSelect" onclick="setDrawingTool('select')" class="btn-panel btn-sm active" title="Select objects">Select</button>
+            </div>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Options</span>
+            <label>Color <input type="color" id="drawColor" value="#000000" class="input-color" /></label>
+            <label>Size <input type="number" id="drawSize" value="2" min="1" max="50" class="input-num" /> px</label>
+          </div>
+        </div>
+      </details>
+
+      <!-- 8. Advanced Elements -->
+      <details class="control-panel" id="panel-advanced">
+        <summary class="panel-summary">Advanced</summary>
+        <div class="panel-content">
+          <div class="panel-section">
+            <span class="panel-label">Callouts &amp; tables</span>
+            <button type="button" onclick="addCallout()" class="btn-panel btn-sm">Callout</button>
+            <div class="row-fields">
+              <label>Rows <input type="number" id="tableRows" value="3" min="1" max="20" class="input-num" /></label>
+              <label>Cols <input type="number" id="tableCols" value="4" min="1" max="20" class="input-num" /></label>
+            </div>
+            <div class="row-fields">
+              <label>Cell W <input type="number" id="tableCellW" value="40" min="8" class="input-num" /></label>
+              <label>Cell H <input type="number" id="tableCellH" value="24" min="8" class="input-num" /></label>
+            </div>
+            <button type="button" onclick="addTable()" class="btn-panel btn-sm">Add table</button>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Barcode</span>
+            <input type="text" id="barcodeData" placeholder="Data" class="input-text" />
+            <label>Type <select id="barcodeFormat" class="input-select">
+              <option value="CODE128">Code 128</option>
+              <option value="CODE39">Code 39</option>
+              <option value="EAN13">EAN-13</option>
+              <option value="EAN8">EAN-8</option>
+              <option value="UPC">UPC</option>
+            </select></label>
+            <div class="row-fields">
+              <label>Width <input type="number" id="barcodeWidth" value="2" min="1" class="input-num" /></label>
+              <label>Height <input type="number" id="barcodeHeight" value="50" min="20" class="input-num" /></label>
+            </div>
+            <button type="button" onclick="addBarcode()" class="btn-panel btn-sm">Add Barcode</button>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">QR Code</span>
+            <input type="text" id="qrText" placeholder="Content" class="input-text" />
+            <label>Size <input type="number" id="qrSize" value="100" min="40" max="400" class="input-num" /></label>
+            <label>Error correction <select id="qrErrorLevel" class="input-select">
+              <option value="L">L (~7%)</option>
+              <option value="M" selected>M (~15%)</option>
+              <option value="Q">Q (~25%)</option>
+              <option value="H">H (~30%)</option>
+            </select></label>
+            <label>Margin <input type="number" id="qrMargin" value="1" min="0" max="10" class="input-num" /></label>
+            <div class="row-fields">
+              <label>Dark <input type="color" id="qrDark" value="#000000" class="input-color" /></label>
+              <label>Light <input type="color" id="qrLight" value="#ffffff" class="input-color" /></label>
+            </div>
+            <button type="button" onclick="addQRCode()" class="btn-panel btn-sm">Add QR</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- 9. Images & Assets -->
+      <details class="control-panel" id="panel-images">
+        <summary class="panel-summary">Images &amp; Assets</summary>
+        <div class="panel-content">
+          <div class="panel-section">
+            <span class="panel-label">SVG</span>
+            <label class="file-label"><input type="file" id="svgUpload" accept=".svg" /> Choose .svg</label>
+            <button type="button" onclick="addSVG()" class="btn-panel btn-sm">Add SVG</button>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Image file</span>
+            <label class="file-label"><input type="file" id="imageUpload" accept=".png,.jpg,.jpeg,.gif,.webp" /> Choose image</label>
+            <button type="button" onclick="addImage()" class="btn-panel btn-sm">Add Image</button>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">From URL</span>
+            <input type="text" id="imageUrl" placeholder="Image URL" class="input-text" />
+            <button type="button" onclick="addImageFromUrl()" class="btn-panel btn-sm">From URL</button>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Remove background</span>
+            <span class="panel-hint">Uses Python (rembg). Start server first.</span>
+            <label class="file-label"><input type="file" id="imageUploadNoBg" accept=".png,.jpg,.jpeg,.gif,.webp" /> Choose image</label>
+            <button type="button" id="btnAddImageNoBg" onclick="addImageWithBackgroundRemoved()" class="btn-panel btn-sm">Add image (no background)</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- 10. Color Utilities -->
+      <details class="control-panel" id="panel-color">
+        <summary class="panel-summary">Color</summary>
+        <div class="panel-content">
+          <div class="panel-section">
+            <span class="panel-label">Eyedropper</span>
+            <button type="button" id="btnCanvasEyedropper" onclick="setEyedropperMode(true)" class="btn-panel btn-sm btn-icon" title="Eyedropper (pick color)">
+              <svg class="icon icon-eyedropper" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M3 2l2 2 7 7-1.4 1.4-7-7-2 2V2z"/><circle fill="currentColor" cx="11" cy="10.5" r="2.2"/></svg>
+              Pick color
+            </button>
+            <span class="panel-hint">Alt+click on canvas: eyedropper.</span>
+          </div>
+          <div class="panel-section">
+            <div class="sampled-color-container" id="sampledColorContainer" aria-label="Sampled color – click to choose">
+              <span class="panel-label">Sampled color</span>
+              <div class="sampled-color-circle-wrap">
+                <input type="color" id="sampledColorPicker" class="sampled-color-picker-input" value="#e0e0e0" aria-label="Choose color" />
+                <div class="sampled-color-circle" id="sampledColorCircle" title="Click to choose color" role="button" tabindex="0"></div>
+              </div>
+              <div class="sampled-color-hex" id="sampledColorHex">#000000</div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- 11. History & Editing -->
+      <details class="control-panel" id="panel-history">
+        <summary class="panel-summary">History</summary>
+        <div class="panel-content">
+          <div class="panel-section">
+            <span class="panel-label">Undo / Redo</span>
+            <div class="row-buttons">
+              <button type="button" id="btnUndo" onclick="undo()" class="btn-panel btn-sm" title="Undo (Ctrl+Z)">Undo</button>
+              <button type="button" id="btnRedo" onclick="redo()" class="btn-panel btn-sm" title="Redo (Ctrl+Y)">Redo</button>
+            </div>
+          </div>
+          <div class="panel-section">
+            <span class="panel-label">Clipboard</span>
+            <div class="row-buttons">
+              <button type="button" onclick="cutSelected()" class="btn-panel btn-sm" title="Cut (Ctrl+X)">Cut</button>
+              <button type="button" onclick="if(LabelMaker.copySelected) LabelMaker.copySelected()" class="btn-panel btn-sm" title="Copy (Ctrl+C)">Copy</button>
+              <button type="button" onclick="if(LabelMaker.pasteFromClipboard) LabelMaker.pasteFromClipboard()" class="btn-panel btn-sm" title="Paste (Ctrl+V)">Paste</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="control-panel" id="panel-shortcuts">
+        <summary class="panel-summary">Keyboard shortcuts</summary>
+        <div class="panel-content">
+          <div class="panel-section shortcuts-list">
+            <span class="panel-label">Tools</span>
+            <div class="shortcut-row"><kbd>V</kbd> Select</div>
+            <div class="shortcut-row"><kbd>T</kbd> Add text</div>
+            <div class="shortcut-row"><kbd>R</kbd> Rectangle</div>
+            <div class="shortcut-row"><kbd>L</kbd> Line</div>
+            <div class="shortcut-row"><kbd>P</kbd> Pencil</div>
+            <div class="shortcut-row"><kbd>E</kbd> Eyedropper</div>
+            <div class="shortcut-row"><kbd>Esc</kbd> Deselect / cancel</div>
+          </div>
+          <div class="panel-section shortcuts-list">
+            <span class="panel-label">Edit</span>
+            <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>A</kbd> Select all</div>
+            <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Z</kbd> Undo</div>
+            <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Y</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> Redo</div>
+            <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>D</kbd> Duplicate</div>
+            <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>G</kbd> Group</div>
+            <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> Ungroup</div>
+            <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>C</kbd> Copy</div>
+            <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>V</kbd> Paste</div>
+            <div class="shortcut-row"><kbd>Del</kbd> Delete</div>
+          </div>
+          <div class="panel-section shortcuts-list">
+            <span class="panel-label">Zoom</span>
+            <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>+</kbd> Zoom in</div>
+            <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>-</kbd> Zoom out</div>
+            <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>0</kbd> Reset 100%</div>
+          </div>
+        </div>
+      </details>
+
+      <div class="controls-footer">
+        <button type="button" id="btnSettings" class="btn-panel btn-icon btn-settings" title="Settings" aria-haspopup="true" aria-expanded="false">
+          <svg class="icon icon-settings" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M14.2 9.1l-1.2-.7c.1-.4.1-.7.1-1.1s0-.7-.1-1.1l1.2-.7c.2-.1.3-.3.3-.5l-.5-1.5c-.1-.2-.3-.3-.5-.3l-1.4.4c-.3-.3-.6-.5-1-.7L11.4 2c0-.2-.1-.4-.3-.4H8.9c-.2 0-.3.2-.3.4l-.2 1.4c-.3.1-.6.3-1 .7L5.9 3.7c-.2-.1-.4 0-.5.3l-.5 1.5c-.1.2 0 .4.3.5l1.2.7c-.1.4-.1.7-.1 1.1s0 .7.1 1.1l-1.2.7c-.2.1-.3.3-.3.5l.5 1.5c.1.2.3.3.5.3l1.4-.4c.3.3.6.5 1 .7l.2 1.4c0 .2.1.4.3.4h1.5c.2 0 .3-.2.3-.4l.2-1.4c.4-.2.7-.4 1-.7l1.4.4c.2.1.4 0 .5-.3l.5-1.5c.1-.2 0-.4-.3-.5zM8 11c-1.7 0-3-1.3-3-3s1.3-3 3-3 3 1.3 3 3-1.3 3-3 3z"/></svg>
+          <span class="btn-settings-label">Settings</span>
+        </button>
+      </div>
+    </div>
+    <div class="panel-resizer panel-resizer-left" id="resizerLeft" role="separator" aria-orientation="vertical" title="Drag to resize panel"></div>
+    <div class="canvas-wrapper">
+      <div class="canvas-rulers-layout" unselectable="on">
+        <div class="ruler-corner" aria-hidden="true" unselectable="on"></div>
+        <div id="rulerHorizontal" class="ruler ruler-h" role="presentation" unselectable="on"></div>
+        <div id="rulerVertical" class="ruler ruler-v" role="presentation" unselectable="on"></div>
+        <div id="canvasZoomWrap" class="canvas-zoom-wrap">
+          <div id="canvasZoomInner" class="canvas-zoom-inner">
+            <div id="canvasGridOverlay" class="canvas-grid-overlay" aria-hidden="true"></div>
+            <div id="canvasGuides" class="canvas-guides" aria-hidden="true"></div>
+            <div id="canvasEmptyHint" class="canvas-empty-hint" aria-hidden="true">Add text, QR, or graphics to start</div>
+            <canvas id="labelCanvas" width="400" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-resizer panel-resizer-right" id="resizerRight" role="separator" aria-orientation="vertical" title="Drag to resize panel"></div>
+    <div class="layers-panel" id="layersPanel">
+      <div class="panel-header right-panel-tabs-header" id="rightPanelTabsHeader">
+        <div class="right-panel-tabs" id="rightPanelTabs">
+          <button type="button" class="right-panel-tab active" data-tab="layers" aria-pressed="true">Layers</button>
+          <button type="button" class="right-panel-tab" data-tab="properties" aria-pressed="false">Properties</button>
+        </div>
+      </div>
+      <div id="paneLayers" class="right-panel-pane">
+        <div class="right-panel-pane-title" id="paneLayersTitle">Layers</div>
+        <ul id="layersList"></ul>
+      </div>
+      <div id="paneProperties" class="right-panel-pane hidden">
+        <div class="right-panel-pane-title" id="panePropertiesTitle">Properties</div>
+        <div id="propertiesContent" class="properties-content panel-content">
+          <p class="properties-empty panel-hint">Select an object on the canvas.</p>
+          <div id="propertiesFields" class="properties-fields hidden">
+            <div class="prop-section panel-section prop-section-transform">
+              <span class="panel-label">Transform</span>
+              <label>X <input type="number" id="propLeft" class="input-num" /></label>
+              <label>Y <input type="number" id="propTop" class="input-num" /></label>
+              <label>W <input type="number" id="propWidth" class="input-num" /></label>
+              <label>H <input type="number" id="propHeight" class="input-num" /></label>
+              <label>Angle <input type="number" id="propAngle" class="input-num" min="-360" max="360" />°</label>
+              <label>Opacity <input type="number" id="propOpacity" class="input-num" min="0" max="100" />%</label>
+              <label class="row-check prop-checkbox"><input type="checkbox" id="propFlipX" /> Flip X</label>
+              <label class="row-check prop-checkbox"><input type="checkbox" id="propFlipY" /> Flip Y</label>
+            </div>
+            <div class="prop-section panel-section prop-section-fill">
+              <span class="panel-label">Fill &amp; stroke</span>
+              <label>Fill <input type="color" id="propFill" class="input-color" /></label>
+              <label>Stroke <input type="color" id="propStroke" class="input-color" /></label>
+              <label>Stroke width <input type="number" id="propStrokeWidth" class="input-num" min="0" /></label>
+            </div>
+            <div class="prop-section panel-section prop-section-text">
+              <span class="panel-label">Text</span>
+              <label>Font <select id="propFontFamily" class="input-select"><option value="Arial">Arial</option><option value="Helvetica">Helvetica</option><option value="Times New Roman">Times New Roman</option><option value="Courier New">Courier New</option><option value="Georgia">Georgia</option><option value="Verdana">Verdana</option><option value="Open Sans">Open Sans</option><option value="Roboto">Roboto</option><option value="Lato">Lato</option><option value="Oswald">Oswald</option><option value="Source Sans 3">Source Sans 3</option><option value="Montserrat">Montserrat</option><option value="PT Sans">PT Sans</option><option value="Inter">Inter</option></select></label>
+              <label>Size <input type="number" id="propFontSize" class="input-num" min="1" /></label>
+              <label class="row-check prop-checkbox"><input type="checkbox" id="propBold" /> Bold</label>
+              <label class="row-check prop-checkbox"><input type="checkbox" id="propItalic" /> Italic</label>
+              <label>Align <select id="propTextAlign" class="input-select"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
+            </div>
+            <div class="prop-section panel-section prop-section-rect">
+              <span class="panel-label">Corner radius</span>
+              <div class="row-fields">
+                <label>RX <input type="number" id="propRx" class="input-num" min="0" /></label>
+                <label>RY <input type="number" id="propRy" class="input-num" min="0" /></label>
+              </div>
+            </div>
+            <div class="prop-section panel-section prop-section-circle">
+              <span class="panel-label">Circle</span>
+              <label>Radius <input type="number" id="propRadius" class="input-num" min="1" /></label>
+            </div>
+            <div class="prop-section panel-section prop-section-ellipse">
+              <span class="panel-label">Ellipse</span>
+              <div class="row-fields">
+                <label>RX <input type="number" id="propEllipseRx" class="input-num" min="1" /></label>
+                <label>RY <input type="number" id="propEllipseRy" class="input-num" min="1" /></label>
+              </div>
+            </div>
+            <div class="prop-section panel-section prop-section-image">
+              <span class="panel-label">Image</span>
+              <label class="row-check prop-checkbox"><input type="checkbox" id="propImageGrayscale" /> Grayscale</label>
+              <label>Brightness <input type="number" id="propImageBrightness" class="input-num" min="-100" max="100" value="0" /></label>
+            </div>
+            <div class="prop-section panel-section prop-section-line">
+              <span class="panel-label">Line</span>
+              <div class="row-fields">
+                <label>X1 <input type="number" id="propLineX1" class="input-num" /></label>
+                <label>Y1 <input type="number" id="propLineY1" class="input-num" /></label>
+              </div>
+              <div class="row-fields">
+                <label>X2 <input type="number" id="propLineX2" class="input-num" /></label>
+                <label>Y2 <input type="number" id="propLineY2" class="input-num" /></label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="settingsPopover" class="settings-popover hidden" role="dialog" aria-label="Settings">
+      <div class="settings-popover-header">Settings</div>
+      <div class="settings-popover-content">
+        <div class="settings-section">
+          <span class="settings-section-title">Theme</span>
+          <div class="settings-theme-toggle" role="group" aria-label="Interface theme">
+            <button type="button" id="settingThemeDark" class="settings-toggle-btn active" data-theme="dark">Dark</button>
+            <button type="button" id="settingThemeLight" class="settings-toggle-btn" data-theme="light">Light</button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <span class="settings-section-title">Panels</span>
+          <div class="settings-option-row settings-option-with-hint">
+            <span class="settings-option-label">Panel order</span>
+            <span class="settings-option-controls">
+              <button type="button" class="right-panel-layout-btn settings-layout-btn" id="settingPanelReorderBtn" title="Allow drag to reorder panels" aria-label="Panel order lock">
+                <svg class="icon icon-lock hidden" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 6V4a4 4 0 0 0-8 0v2H3v9h10V6h-1zM6 4a2 2 0 0 1 4 0v2H6V4z"/></svg>
+                <svg class="icon icon-unlock" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 6V4a2 2 0 0 0-3.2-1.6l-.8.8A1 1 0 0 1 7 3.4l.8-.8A4 4 0 0 1 13 4v2h1v9H2V6h10z"/></svg>
+              </button>
+              <span class="settings-hint" tabindex="0" aria-label="More info">
+                <svg class="icon icon-info" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1zm0 2a5 5 0 1 0 0 10A5 5 0 0 0 8 3zm0 3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 6.5zm0-2.25a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5z"/></svg>
+                <span class="settings-hint-tooltip" role="tooltip">Use the grip on panel titles to change their order.</span>
+              </span>
+            </span>
+          </div>
+          <div class="settings-option-row settings-option-with-hint">
+            <span class="settings-option-label">Right panel tabs</span>
+            <span class="settings-option-controls">
+              <button type="button" class="right-panel-layout-btn settings-layout-btn" id="rightPanelLayoutBtn" title="Switch to stacked layout" aria-label="Tab layout">
+                <svg class="icon icon-layout-h" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M2 2h5v12H2V2zm7 0h5v12H9V2z"/></svg>
+                <svg class="icon icon-layout-v hidden" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M2 2h12v5H2V2zm0 7h12v5H2V9z"/></svg>
+              </button>
+              <span class="settings-hint" tabindex="0" aria-label="More info">
+                <svg class="icon icon-info" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1zm0 2a5 5 0 1 0 0 10A5 5 0 0 0 8 3zm0 3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 6.5zm0-2.25a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5z"/></svg>
+                <span class="settings-hint-tooltip" role="tooltip">Side by side or stacked Layers/Properties.</span>
+              </span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="welcomeModal" class="welcome-modal" role="dialog" aria-labelledby="welcomeModalTitle" aria-modal="true">
+    <div class="welcome-modal-backdrop"></div>
+    <div class="welcome-modal-content">
+      <div class="welcome-modal-header">
+        <h2 id="welcomeModalTitle" class="welcome-modal-title">Label Designer</h2>
+        <p class="welcome-modal-subtitle">Design printable labels in the browser</p>
+      </div>
+      <p class="welcome-modal-text">Add text, QR codes, barcodes, shapes, and images on the canvas. Use the left panel for tools, the right for layers and properties. Export to PNG, PDF, XML, or ZPL—or print directly.</p>
+      <label class="welcome-modal-dont-show">
+        <input type="checkbox" id="welcomeModalDontShowAgain" />
+        <span>Don't show this again</span>
+      </label>
+      <button type="button" id="welcomeModalBtn" class="btn-panel welcome-modal-btn">Get started</button>
+      <p class="welcome-modal-credit">Created by <a href="https://ilir.netlify.app/" target="_blank" rel="noopener noreferrer" class="welcome-modal-link">Ilir Krasniqi</a></p>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
