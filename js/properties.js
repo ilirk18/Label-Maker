@@ -37,14 +37,33 @@ const canvas = LabelMaker.canvas;
   function updatePropertiesPanel() {
     const emptyEl = document.querySelector('.properties-empty');
     const fieldsEl = document.getElementById('propertiesFields');
+    const toolOptionsContainer = document.getElementById('toolOptionsContainer');
     if (!emptyEl || !fieldsEl) return;
     const obj = canvas.getActiveObject();
-    if (!obj || (canvas.getActiveObjects && canvas.getActiveObjects().length > 1)) {
-      emptyEl.classList.remove('hidden');
+    const hasSingleSelection = obj && (!canvas.getActiveObjects || canvas.getActiveObjects().length <= 1);
+    if (!hasSingleSelection) {
       fieldsEl.classList.add('hidden');
+      const activeTool = typeof LabelMaker.getActiveTool === 'function' ? LabelMaker.getActiveTool() : 'text';
+      /* When no selection: show tool options only for shape/line/draw/eyedropper; show empty message for Select or Pan */
+      const showToolOptions = activeTool != null && activeTool !== 'text';
+      if (toolOptionsContainer) {
+        if (showToolOptions) {
+          toolOptionsContainer.classList.remove('hidden');
+          emptyEl.classList.add('hidden');
+          document.querySelectorAll('.tool-options-pane').forEach(function (pane) {
+            pane.classList.toggle('hidden', pane.getAttribute('data-tool') !== activeTool);
+          });
+        } else {
+          toolOptionsContainer.classList.add('hidden');
+          emptyEl.classList.remove('hidden');
+        }
+      } else {
+        emptyEl.classList.remove('hidden');
+      }
       return;
     }
     emptyEl.classList.add('hidden');
+    if (toolOptionsContainer) toolOptionsContainer.classList.add('hidden');
     fieldsEl.classList.remove('hidden');
     const type = obj.type || '';
     document.querySelectorAll('.prop-section').forEach(function (section) {

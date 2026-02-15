@@ -140,70 +140,96 @@
   display: none !important;
 }
 
-/* Controls footer & settings */
+/* Controls footer: theme switch (portfolio/Markdown style) & settings */
 .controls-footer {
   margin-top: auto;
-  padding: 8px 12px 12px;
+  padding: 10px 12px 12px;
   background: #252525;
   border-top: 1px solid #1f1f1f;
   position: relative;
   flex-shrink: 0;
-}
-
-.btn-settings {
-  width: 100%;
-  justify-content: center;
-  color: #888;
-  background: #323232;
-  border-color: #404040;
-}
-
-.btn-settings:hover {
-  color: #b0b0b0;
-  background: #3a3a3a;
-}
-
-.btn-settings .icon-settings {
-  width: 16px;
-  height: 16px;
-}
-
-.btn-settings-label {
-  margin-left: 6px;
-}
-
-.settings-popover {
-  position: fixed;
-  background: #2b2b2b;
-  border: 1px solid #505050;
-  border-radius: 4px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-  z-index: 10000;
-  overflow: visible;
-  /* width set by JS to match Settings button */
-}
-
-.settings-popover.hidden {
-  display: none !important;
-}
-
-.settings-popover-header {
-  padding: 10px 14px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  color: #b0b0b0;
-  background: #252525;
-  border-bottom: 1px solid #1f1f1f;
-}
-
-.settings-popover-content {
-  padding: 12px 14px 14px;
-  font-size: 11px;
-  color: #b8b8b8;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 10px;
+}
+
+.theme-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.controls-footer .theme-switch-label {
+  font-size: 11px;
+  color: #a3a3a3;
+  min-width: 28px;
+}
+
+.controls-footer .theme-switch-label:first-of-type {
+  text-align: right;
+}
+
+.controls-footer .theme-switch-label:last-of-type {
+  text-align: left;
+}
+
+.theme-switch {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+
+.theme-switch-track {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  background: #404040;
+  border: 1px solid #505050;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.theme-switch:hover .theme-switch-track {
+  background: #484848;
+  border-color: #606060;
+}
+
+.theme-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #e0e0e0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+}
+
+.theme-switch[aria-checked="true"] .theme-switch-thumb {
+  transform: translateX(18px);
+}
+
+.theme-switch[aria-checked="true"] .theme-switch-track {
+  background: #0d7acc;
+  border-color: #0d7acc;
+}
+
+.theme-switch[aria-checked="true"]:hover .theme-switch-track {
+  background: #1a8ae0;
+  border-color: #1a8ae0;
+}
+
+.theme-switch:focus-visible {
+  outline: 2px solid #0d7acc;
+  outline-offset: 2px;
+  border-radius: 13px;
 }
 
 .settings-section {
@@ -421,6 +447,42 @@
 .panel-content > .input-text {
   width: 100%;
   box-sizing: border-box;
+}
+
+/* Settings in left panel (Markdown Editor style) */
+.settings-panel-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.settings-panel-content .settings-intro {
+  margin: 0 0 12px;
+  font-size: 11px;
+  color: #888;
+  line-height: 1.4;
+}
+
+.settings-block {
+  padding: 12px 0;
+  border-bottom: 1px solid #3d3d3d;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-block:last-of-type {
+  border-bottom: none;
+}
+
+.settings-block-title {
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #888;
+  font-family: inherit;
 }
 
 .row-fields {
@@ -969,11 +1031,75 @@
   min-height: 0;
 }
 
+/* Stacked order: Properties above Layers */
+.layers-panel.tabs-layout-stacked #paneProperties {
+  order: 1;
+}
+.layers-panel.tabs-layout-stacked #paneLayers {
+  order: 2;
+}
+.layers-panel.tabs-layout-stacked .right-panel-tabs-header {
+  order: 0;
+}
+
 .properties-content {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+/* ----- Custom scrollbars (Markdown Editor style) ----- */
+.controls,
+.layers-panel,
+.right-panel-pane,
+.properties-content,
+.canvas-toolbar {
+  scrollbar-width: thin;
+  scrollbar-color: #505050 #2b2b2b;
+}
+
+.controls::-webkit-scrollbar,
+.layers-panel::-webkit-scrollbar,
+.right-panel-pane::-webkit-scrollbar,
+.properties-content::-webkit-scrollbar,
+.canvas-toolbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.controls::-webkit-scrollbar-track,
+.layers-panel::-webkit-scrollbar-track,
+.right-panel-pane::-webkit-scrollbar-track,
+.properties-content::-webkit-scrollbar-track,
+.canvas-toolbar::-webkit-scrollbar-track {
+  background: #2b2b2b;
+}
+
+.controls::-webkit-scrollbar-thumb,
+.layers-panel::-webkit-scrollbar-thumb,
+.right-panel-pane::-webkit-scrollbar-thumb,
+.properties-content::-webkit-scrollbar-thumb,
+.canvas-toolbar::-webkit-scrollbar-thumb {
+  background: #505050;
+  border-radius: 5px;
+  border: 2px solid #2b2b2b;
+}
+
+.controls::-webkit-scrollbar-thumb:hover,
+.layers-panel::-webkit-scrollbar-thumb:hover,
+.right-panel-pane::-webkit-scrollbar-thumb:hover,
+.properties-content::-webkit-scrollbar-thumb:hover,
+.canvas-toolbar::-webkit-scrollbar-thumb:hover {
+  background: #606060;
+}
+
+.controls::-webkit-scrollbar-thumb:active,
+.layers-panel::-webkit-scrollbar-thumb:active,
+.right-panel-pane::-webkit-scrollbar-thumb:active,
+.properties-content::-webkit-scrollbar-thumb:active,
+.canvas-toolbar::-webkit-scrollbar-thumb:active {
+  background: #0d7acc;
 }
 
 .properties-empty {
@@ -982,6 +1108,42 @@
 
 .properties-empty.panel-hint {
   padding: 0;
+}
+
+.tool-options-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tool-options-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tool-options-pane .panel-label {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.tool-options-pane label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tool-options-pane .row-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tool-options-pane .row-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .properties-fields {

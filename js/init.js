@@ -77,9 +77,9 @@ document.querySelectorAll('.controls .control-panel').forEach(function (panel) {
 function isPanelReorderEnabled() {
   try {
     const v = localStorage.getItem(PANEL_REORDER_ENABLED_KEY);
-    return v !== 'false';
+    return v === 'true';
   } catch (err) {
-    return true;
+    return false;
   }
 }
 
@@ -108,6 +108,13 @@ function setTheme(theme) {
     localStorage.setItem(THEME_KEY, theme);
   } catch (err) {}
   document.body.classList.toggle('theme-light', theme === 'light');
+  const fav = document.getElementById('favicon');
+  if (fav) fav.href = theme === 'light' ? 'favicon-light.svg' : 'favicon.svg';
+  const themeSwitch = document.getElementById('themeSwitch');
+  if (themeSwitch) {
+    themeSwitch.setAttribute('aria-checked', theme === 'light');
+    themeSwitch.setAttribute('aria-label', theme === 'light' ? 'Use dark theme' : 'Use light theme');
+  }
 }
 
 setTheme(getTheme());
@@ -115,9 +122,9 @@ setTheme(getTheme());
 function getRightPanelTabsLayout() {
   try {
     const v = localStorage.getItem(RIGHT_PANEL_TABS_KEY);
-    return (v === 'vertical' || v === 'horizontal') ? v : 'horizontal';
+    return (v === 'vertical' || v === 'horizontal') ? v : 'vertical';
   } catch (err) {
-    return 'horizontal';
+    return 'vertical';
   }
 }
 
@@ -299,14 +306,26 @@ if (isPanelReorderEnabled()) {
   if (c) c.classList.add('panel-reorder-enabled');
 }
 
-function setupSettingsPanel() {
-  const btn = document.getElementById('btnSettings');
-  const popover = document.getElementById('settingsPopover');
-  const reorderBtn = document.getElementById('settingPanelReorderBtn');
-  const themeDarkBtn = document.getElementById('settingThemeDark');
-  const themeLightBtn = document.getElementById('settingThemeLight');
+/* Only one section open at a time (accordion) */
+function setupControlsAccordion() {
   const controls = document.querySelector('.controls');
-  if (!btn || !popover || !controls) return;
+  if (!controls) return;
+  controls.addEventListener('toggle', function (e) {
+    if (e.target.tagName !== 'DETAILS' || !e.target.open) return;
+    const panels = controls.querySelectorAll('details.control-panel');
+    panels.forEach(function (d) {
+      if (d !== e.target) d.removeAttribute('open');
+    });
+  });
+}
+setupControlsAccordion();
+
+function setupSettingsPanel() {
+  const reorderBtn = document.getElementById('settingPanelReorderBtn');
+  const layoutBtn = document.getElementById('rightPanelLayoutBtn');
+  const themeSwitch = document.getElementById('themeSwitch');
+  const controls = document.querySelector('.controls');
+  if (!controls) return;
 
   function updateReorderBtnState() {
     if (!reorderBtn) return;
@@ -334,27 +353,23 @@ function setupSettingsPanel() {
     });
   }
 
-  function updateThemeButtons() {
+  function updateThemeSwitch() {
     const t = getTheme();
-    if (themeDarkBtn) themeDarkBtn.classList.toggle('active', t === 'dark');
-    if (themeLightBtn) themeLightBtn.classList.toggle('active', t === 'light');
+    if (themeSwitch) {
+      themeSwitch.setAttribute('aria-checked', t === 'light');
+      themeSwitch.setAttribute('aria-label', t === 'light' ? 'Use dark theme' : 'Use light theme');
+    }
   }
-  updateThemeButtons();
+  updateThemeSwitch();
 
-  if (themeDarkBtn) {
-    themeDarkBtn.addEventListener('click', function () {
-      setTheme('dark');
-      updateThemeButtons();
-    });
-  }
-  if (themeLightBtn) {
-    themeLightBtn.addEventListener('click', function () {
-      setTheme('light');
-      updateThemeButtons();
+  if (themeSwitch) {
+    themeSwitch.addEventListener('click', function () {
+      const next = getTheme() === 'light' ? 'dark' : 'light';
+      setTheme(next);
+      updateThemeSwitch();
     });
   }
 
-  const layoutBtn = document.getElementById('rightPanelLayoutBtn');
   if (layoutBtn) {
     function updateLayoutBtnState() {
       const layout = getRightPanelTabsLayout();
@@ -377,38 +392,6 @@ function setupSettingsPanel() {
       updateLayoutBtnState();
     });
   }
-
-  function positionPopover() {
-    const btnRect = btn.getBoundingClientRect();
-    const gap = 6;
-    popover.style.left = btnRect.left + 'px';
-    popover.style.width = btnRect.width + 'px';
-    popover.style.bottom = (window.innerHeight - btnRect.top + gap) + 'px';
-    popover.style.top = '';
-  }
-
-  function setPopoverOpen(open) {
-    popover.classList.toggle('hidden', !open);
-    btn.setAttribute('aria-expanded', open);
-    if (open) positionPopover();
-  }
-
-  btn.addEventListener('click', function (e) {
-    e.stopPropagation();
-    const isOpen = !popover.classList.contains('hidden');
-    setPopoverOpen(!isOpen);
-  });
-
-  window.addEventListener('resize', function () {
-    if (!popover.classList.contains('hidden')) positionPopover();
-  });
-
-  document.addEventListener('click', function (e) {
-    if (popover.classList.contains('hidden')) return;
-    if (!popover.contains(e.target) && e.target !== btn) {
-      setPopoverOpen(false);
-    }
-  });
 }
 
 setupSettingsPanel();
@@ -425,6 +408,11 @@ LabelMaker.updateLayersList();
 LabelMaker.updateEmptyState();
 LabelMaker.updatePropertiesPanel();
 if (LabelMaker.updateSelectionDependentButtons) LabelMaker.updateSelectionDependentButtons();
+/* Default to Select tool and sync toolbar state */
+if (LabelMaker.setShapeTool) LabelMaker.setShapeTool(null);
+if (LabelMaker.setDrawingTool) LabelMaker.setDrawingTool('select');
+if (typeof window.updateCanvasToolButtons === 'function') window.updateCanvasToolButtons('select');
+LabelMaker.updatePropertiesPanel();
 restorePanelState();
 LabelMaker.applyCanvasZoom();
 if (LabelMaker.updateRulers) LabelMaker.updateRulers();

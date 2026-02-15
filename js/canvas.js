@@ -281,18 +281,18 @@ const canvas = LabelMaker.canvas;
 
     function buildHorizontalRuler() {
       rulerH.innerHTML = '';
-      const step = zoom >= 0.5 ? 10 : zoom >= 0.25 ? 20 : 50;
-      const majorStep = Math.max(50, Math.round(100 / zoom));
+      const step = 10;
+      const majorStep = 50;
       for (let x = 0; x <= w; x += step) {
         const leftPx = (x * zoom).toFixed(1);
-        const isMajor = x % majorStep === 0 || x === 0;
+        const isMajor = x % majorStep === 0;
         const tick = document.createElement('span');
         tick.className = 'ruler-tick' + (isMajor ? ' ruler-tick-major' : '');
         tick.style.left = leftPx + 'px';
         if (isMajor) {
           const label = document.createElement('span');
           label.className = 'ruler-label';
-          label.textContent = x;
+          label.textContent = String(x);
           label.style.left = leftPx + 'px';
           rulerH.appendChild(label);
         }
@@ -302,18 +302,18 @@ const canvas = LabelMaker.canvas;
 
     function buildVerticalRuler() {
       rulerV.innerHTML = '';
-      const step = zoom >= 0.5 ? 10 : zoom >= 0.25 ? 20 : 50;
-      const majorStep = Math.max(50, Math.round(100 / zoom));
+      const step = 10;
+      const majorStep = 50;
       for (let y = 0; y <= h; y += step) {
         const topPx = (y * zoom).toFixed(1);
-        const isMajor = y % majorStep === 0 || y === 0;
+        const isMajor = y % majorStep === 0;
         const tick = document.createElement('span');
-        tick.className = 'ruler-tick ruler-tick-v' + (isMajor ? ' ruler-tick-major' : '');
+        tick.className = 'ruler-tick' + (isMajor ? ' ruler-tick-major' : '');
         tick.style.top = topPx + 'px';
         if (isMajor) {
           const label = document.createElement('span');
-          label.className = 'ruler-label ruler-label-v';
-          label.textContent = y;
+          label.className = 'ruler-label';
+          label.textContent = String(y);
           label.style.top = topPx + 'px';
           rulerV.appendChild(label);
         }

@@ -169,6 +169,18 @@ body.theme-light .settings-section-title {
   color: #707070;
 }
 
+body.theme-light .settings-panel-content .settings-intro {
+  color: #666;
+}
+
+body.theme-light .settings-block {
+  border-bottom-color: #e0e0e0;
+}
+
+body.theme-light .settings-block-title {
+  color: #707070;
+}
+
 body.theme-light .settings-theme-toggle {
   border-color: #bbb;
   background: #e8e8e8;
@@ -227,30 +239,91 @@ body.theme-light .shortcuts-list kbd {
 }
 
 body.theme-light .canvas-wrapper {
+  background-color: #e8eef4;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 20% 10%, rgba(13, 122, 204, 0.18) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 85% 25%, rgba(13, 122, 204, 0.12) 0%, transparent 50%),
+    radial-gradient(ellipse 70% 60% at 50% 85%, rgba(13, 122, 204, 0.1) 0%, transparent 50%);
+}
+
+body.theme-light .canvas-toolbar {
+  background: #ebebeb;
+  border-bottom-color: #d0d0d0;
+}
+
+body.theme-light .canvas-toolbar-sep {
+  background: #ccc;
+}
+
+body.theme-light .canvas-toolbar-btn {
+  color: #555;
+}
+
+body.theme-light .canvas-toolbar-btn:hover {
   background: #e0e0e0;
+  color: #222;
+}
+
+body.theme-light .canvas-toolbar-btn.active {
+  background: #0d7acc;
+  color: #fff;
+}
+
+body.theme-light .controls-footer .theme-switch-label {
+  color: #666;
+}
+
+body.theme-light .theme-switch-track {
+  background: #e0e0e0;
+  border-color: #ccc;
+}
+
+body.theme-light .theme-switch:hover .theme-switch-track {
+  background: #e8e8e8;
+  border-color: #bbb;
+}
+
+body.theme-light .theme-switch-thumb {
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+body.theme-light .theme-switch[aria-checked="true"] .theme-switch-track {
+  background: #0d7acc;
+  border-color: #0d7acc;
+}
+
+body.theme-light .theme-switch[aria-checked="true"]:hover .theme-switch-track {
+  background: #1a8ae0;
+  border-color: #1a8ae0;
 }
 
 body.theme-light .ruler-corner,
 body.theme-light .ruler {
-  background: #ececec;
-  color: #666;
+  background: #e5e5e5;
+  color: #555;
 }
 
 body.theme-light .ruler-corner {
-  border-right-color: #ccc;
-  border-bottom-color: #ccc;
+  border-right-color: #d0d0d0;
+  border-bottom-color: #d0d0d0;
 }
 
 body.theme-light .ruler-h {
-  border-bottom-color: #ccc;
+  border-bottom-color: #d0d0d0;
 }
 
 body.theme-light .ruler-v {
-  border-right-color: #ccc;
+  border-right-color: #d0d0d0;
 }
 
 body.theme-light .ruler-tick {
-  background: #999;
+  background: #888;
+}
+
+body.theme-light .ruler-h .ruler-label,
+body.theme-light .ruler-v .ruler-label {
+  color: #666;
 }
 
 body.theme-light .canvas-grid-overlay {
@@ -441,4 +514,46 @@ body.theme-light .welcome-modal-credit {
 
 body.theme-light .welcome-modal-link {
   color: #0d7acc;
+}
+
+/* Custom scrollbars – light theme */
+body.theme-light .controls,
+body.theme-light .layers-panel,
+body.theme-light .right-panel-pane,
+body.theme-light .properties-content,
+body.theme-light .canvas-toolbar {
+  scrollbar-color: #bbb #e8e8e8;
+}
+
+body.theme-light .controls::-webkit-scrollbar-track,
+body.theme-light .layers-panel::-webkit-scrollbar-track,
+body.theme-light .right-panel-pane::-webkit-scrollbar-track,
+body.theme-light .properties-content::-webkit-scrollbar-track,
+body.theme-light .canvas-toolbar::-webkit-scrollbar-track {
+  background: #e8e8e8;
+}
+
+body.theme-light .controls::-webkit-scrollbar-thumb,
+body.theme-light .layers-panel::-webkit-scrollbar-thumb,
+body.theme-light .right-panel-pane::-webkit-scrollbar-thumb,
+body.theme-light .properties-content::-webkit-scrollbar-thumb,
+body.theme-light .canvas-toolbar::-webkit-scrollbar-thumb {
+  background: #bbb;
+  border-color: #e8e8e8;
+}
+
+body.theme-light .controls::-webkit-scrollbar-thumb:hover,
+body.theme-light .layers-panel::-webkit-scrollbar-thumb:hover,
+body.theme-light .right-panel-pane::-webkit-scrollbar-thumb:hover,
+body.theme-light .properties-content::-webkit-scrollbar-thumb:hover,
+body.theme-light .canvas-toolbar::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+body.theme-light .controls::-webkit-scrollbar-thumb:active,
+body.theme-light .layers-panel::-webkit-scrollbar-thumb:active,
+body.theme-light .right-panel-pane::-webkit-scrollbar-thumb:active,
+body.theme-light .properties-content::-webkit-scrollbar-thumb:active,
+body.theme-light .canvas-toolbar::-webkit-scrollbar-thumb:active {
+  background: #0d7acc;
 }

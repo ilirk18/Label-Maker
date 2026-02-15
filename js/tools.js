@@ -193,12 +193,19 @@ const canvas = LabelMaker.canvas;
 
   function setShapeTool(tool) {
     currentShapeTool = tool;
+    if (tool !== null) {
+      panMode = false;
+      eyedropperMode = false;
+      if (typeof updateCanvasToolButtons === 'function') updateCanvasToolButtons('select');
+    }
     document.querySelectorAll('[id^="btnShape"]').forEach(function (btn) {
       const id = btn.id;
       const isSelect = id === 'btnShapeSelect';
       const active = (tool === null && isSelect) || (tool && SHAPE_TOOL_BUTTONS[tool] === id);
       btn.classList.toggle('active', !!active);
     });
+    const btnCanvasSelect = document.getElementById('btnCanvasSelect');
+    if (btnCanvasSelect) btnCanvasSelect.classList.toggle('active', tool === null);
     canvas.selection = (tool === null);
     canvas.defaultCursor = tool ? 'crosshair' : 'default';
     canvas.hoverCursor = tool ? 'crosshair' : 'move';
@@ -207,6 +214,8 @@ const canvas = LabelMaker.canvas;
       if (LabelMaker.setDrawingTool) LabelMaker.setDrawingTool('select');
     }
     if (tool === null && !panMode && !eyedropperMode && typeof updateCanvasToolButtons === 'function') updateCanvasToolButtons('select');
+    updateCanvasAreaCursor();
+    if (typeof LabelMaker.updatePropertiesPanel === 'function') LabelMaker.updatePropertiesPanel();
   }
 
   function getShapeToolStyle() {
@@ -426,6 +435,19 @@ const canvas = LabelMaker.canvas;
   let panY = 0;
   const rulersLayout = document.querySelector('.canvas-rulers-layout');
 
+  function updateCanvasAreaCursor() {
+    const el = document.querySelector('.canvas-rulers-layout');
+    if (!el) return;
+    let c = 'default';
+    if (panStart && panMode) c = 'grabbing';
+    else if (panMode) c = 'grab';
+    else if (eyedropperMode) c = 'crosshair';
+    else if (currentDrawingTool && currentDrawingTool !== 'select') c = 'crosshair';
+    else if (currentShapeTool) c = 'crosshair';
+    else c = 'default';
+    el.style.cursor = c;
+  }
+
   function updateCanvasToolButtons(activeTool) {
     const btnSelect = document.getElementById('btnCanvasSelect');
     const btnPan = document.getElementById('btnCanvasPan');
@@ -450,6 +472,8 @@ const canvas = LabelMaker.canvas;
       canvas.hoverCursor = 'crosshair';
     }
     updateCanvasToolButtons(eyedropperMode ? 'eyedropper' : 'select');
+    updateCanvasAreaCursor();
+    if (typeof LabelMaker.updatePropertiesPanel === 'function') LabelMaker.updatePropertiesPanel();
   }
 
   function setPanTool(on) {
@@ -467,6 +491,8 @@ const canvas = LabelMaker.canvas;
       canvas.hoverCursor = currentShapeTool ? 'crosshair' : 'move';
     }
     updateCanvasToolButtons(panMode ? 'pan' : 'select');
+    updateCanvasAreaCursor();
+    if (typeof LabelMaker.updatePropertiesPanel === 'function') LabelMaker.updatePropertiesPanel();
   }
 
   function applyPanTransform() {
@@ -485,12 +511,14 @@ const canvas = LabelMaker.canvas;
       canvas.defaultCursor = currentShapeTool ? 'crosshair' : 'default';
       canvas.hoverCursor = currentShapeTool ? 'crosshair' : 'move';
       updateCanvasToolButtons('select');
+      updateCanvasAreaCursor();
       return;
     }
     if (panMode) {
       panStart = { clientX: e.e.clientX, clientY: e.e.clientY };
       if (canvas.defaultCursor === 'grab') canvas.defaultCursor = 'grabbing';
       if (canvas.hoverCursor === 'grab') canvas.hoverCursor = 'grabbing';
+      updateCanvasAreaCursor();
       return;
     }
     if (e.e.altKey && !e.e.shiftKey) {
@@ -552,6 +580,7 @@ const canvas = LabelMaker.canvas;
         canvas.defaultCursor = 'grab';
         canvas.hoverCursor = 'grab';
       }
+      updateCanvasAreaCursor();
       return;
     }
     if (!_shapeDrawing || !_shapeDrawStart) return;
@@ -955,20 +984,29 @@ const canvas = LabelMaker.canvas;
     const btnBrush = document.getElementById('btnToolBrush');
     const btnSpray = document.getElementById('btnToolSpray');
     const btnEraser = document.getElementById('btnToolEraser');
-    const btnSelect = document.getElementById('btnToolSelect');
+    const btnSelect = document.getElementById('btnToolSelect') || document.getElementById('btnCanvasSelect');
     if (btnPencil) btnPencil.classList.toggle('active', mode === 'pencil');
     if (btnBrush) btnBrush.classList.toggle('active', mode === 'brush');
     if (btnSpray) btnSpray.classList.toggle('active', mode === 'spray');
     if (btnEraser) btnEraser.classList.toggle('active', mode === 'eraser');
     if (btnSelect) btnSelect.classList.toggle('active', mode === 'select');
 
+    updateCanvasAreaCursor();
+    if (typeof LabelMaker.updatePropertiesPanel === 'function') LabelMaker.updatePropertiesPanel();
+
     if (mode === 'select') {
+      panMode = false;
+      eyedropperMode = false;
       canvas.isDrawingMode = false;
       canvas.defaultCursor = currentShapeTool ? 'crosshair' : 'default';
       canvas.hoverCursor = currentShapeTool ? 'crosshair' : 'move';
       canvas.selection = (currentShapeTool === null);
+      if (typeof updateCanvasToolButtons === 'function') updateCanvasToolButtons('select');
       return;
     }
+    panMode = false;
+    eyedropperMode = false;
+    if (typeof updateCanvasToolButtons === 'function') updateCanvasToolButtons('select');
     setShapeTool(null);
 
     canvas.isDrawingMode = true;
@@ -1050,8 +1088,22 @@ const canvas = LabelMaker.canvas;
   LabelMaker.setEyedropperMode = setEyedropperMode;
   LabelMaker.updateSampledColorDisplay = updateSampledColorDisplay;
   LabelMaker.updateCanvasToolButtons = updateCanvasToolButtons;
+  LabelMaker.updateCanvasAreaCursor = updateCanvasAreaCursor;
   LabelMaker.currentShapeTool = function () { return currentShapeTool; };
   LabelMaker.isShapeDrawing = isShapeDrawing;
+
+  /** Returns active tool key for Properties panel: 'text' | 'shape' | 'line' | 'draw' | 'eyedropper' | null */
+  function getActiveTool() {
+    if (panMode) return null;
+    if (eyedropperMode) return 'eyedropper';
+    if (currentDrawingTool && currentDrawingTool !== 'select') return 'draw';
+    if (currentShapeTool === 'line') return 'line';
+    if (currentShapeTool) return 'shape';
+    return 'text';
+  }
+  LabelMaker.getActiveTool = getActiveTool;
+
+  updateCanvasAreaCursor();
 
   LabelMaker.addText = addText;
   LabelMaker.addQRCode = addQRCode;
