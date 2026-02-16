@@ -4,7 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Label Designer</title>
-  <link rel="icon" id="favicon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20fill%3D%22%231a1a1a%22%20rx%3D%224%22%2F%3E%3Ctext%20x%3D%2216%22%20y%3D%2222%22%20font-family%3D%22Segoe%20UI%2C%20system-ui%2C%20sans-serif%22%20font-size%3D%2214%22%20font-weight%3D%22bold%22%20fill%3D%22%230d7acc%22%20text-anchor%3D%22middle%22%3EIK%3C%2Ftext%3E%3C%2Fsvg%3E" type="image/svg+xml" />
+  <script>
+    (function(){
+      try {
+        var dark = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" fill="#1a1a1a" rx="4"/><text x="16" y="22" font-family="Segoe UI, system-ui, sans-serif" font-size="14" font-weight="bold" fill="#0d7acc" text-anchor="middle">IK</text></svg>');
+        var light = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" fill="#e8e8e8" rx="4"/><text x="16" y="22" font-family="Segoe UI, system-ui, sans-serif" font-size="14" font-weight="bold" fill="#0d7acc" text-anchor="middle">IK</text></svg>');
+        window.__labelMakerFaviconDark = dark;
+        window.__labelMakerFaviconLight = light;
+        var t = localStorage.getItem('labelMakerTheme');
+        var fav = document.getElementById('favicon');
+        if (fav) fav.href = t === 'light' ? light : dark;
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="css/base.css" />
   <link rel="stylesheet" href="css/panels.css" />
   <link rel="stylesheet" href="css/canvas.css" />
@@ -20,16 +33,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 </head>
 <body>
-  <script>
-    (function(){
-      try {
-        var t = localStorage.getItem('labelMakerTheme');
-        var fav = document.getElementById('favicon');
-        if (t === 'light') { document.body.classList.add('theme-light'); if (fav) fav.href = 'favicon-light.svg'; }
-        else if (t === 'dark') { document.body.classList.remove('theme-light'); if (fav) fav.href = 'favicon.svg'; }
-      } catch (e) {}
-    })();
-  </script>
+  <script>try{var _t=localStorage.getItem('labelMakerTheme');if(_t==='light')document.body.classList.add('theme-light');}catch(e){}</script>
   <div class="container">
     <div class="controls" id="controlsPanel">
       <div class="panel-header">

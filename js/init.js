@@ -109,7 +109,7 @@ function setTheme(theme) {
   } catch (err) {}
   document.body.classList.toggle('theme-light', theme === 'light');
   const fav = document.getElementById('favicon');
-  if (fav) fav.href = theme === 'light' ? 'favicon-light.svg' : 'favicon.svg';
+  if (fav && window.__labelMakerFaviconDark && window.__labelMakerFaviconLight) fav.href = theme === 'light' ? window.__labelMakerFaviconLight : window.__labelMakerFaviconDark;
   const themeSwitch = document.getElementById('themeSwitch');
   if (themeSwitch) {
     themeSwitch.setAttribute('aria-checked', theme === 'light');
