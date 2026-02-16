@@ -12,7 +12,9 @@
         var light = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" fill="#e8e8e8" rx="4"/><text x="16" y="22" font-family="Segoe UI, system-ui, sans-serif" font-size="14" font-weight="bold" fill="#0d7acc" text-anchor="middle">IK</text></svg>');
         window.__labelMakerFaviconDark = dark;
         window.__labelMakerFaviconLight = light;
-        var t = localStorage.getItem('ilirTheme');
+        var m = location.search.match(/[?&]theme=(light|dark)/);
+        var t = m ? m[1] : localStorage.getItem('ilirTheme');
+        if (m) try { localStorage.setItem('ilirTheme', t); } catch (e) {}
         var fav = document.getElementById('favicon');
         if (fav) fav.href = t === 'light' ? light : dark;
       } catch (e) {}
@@ -33,7 +35,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 </head>
 <body>
-  <script>try{var _t=localStorage.getItem('ilirTheme');if(_t==='light')document.body.classList.add('theme-light');}catch(e){}</script>
+  <script>try{var m=location.search.match(/[?&]theme=(light|dark)/);var _t=m?m[1]:localStorage.getItem('ilirTheme');if(m)localStorage.setItem('ilirTheme',_t);document.body.classList.toggle('theme-light',_t==='light');}catch(e){}</script>
   <div class="container">
     <div class="controls" id="controlsPanel">
       <div class="panel-header">

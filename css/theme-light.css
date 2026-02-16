@@ -339,6 +339,28 @@ body.theme-light .layers-panel {
   border-left-color: #d0d0d0;
 }
 
+body.theme-light .layers-panel .panel-header,
+body.theme-light .right-panel-tabs-header {
+  background: #ebebeb;
+  border-bottom-color: #d0d0d0;
+}
+
+body.theme-light .right-panel-pane-title {
+  color: #505050;
+  background: #ebebeb;
+  border-left-color: #0d7acc;
+  border-bottom-color: #d0d0d0;
+}
+
+body.theme-light .layers-panel.tabs-layout-stacked .right-panel-pane-title {
+  border-bottom-color: #d0d0d0;
+}
+
+body.theme-light .layers-panel.tabs-layout-stacked .right-panel-pane,
+body.theme-light .layers-panel.tabs-layout-stacked .right-panel-pane + .right-panel-pane {
+  border-color: #d0d0d0;
+}
+
 body.theme-light .right-panel-tab {
   color: #707070;
   background: #ebebeb;
